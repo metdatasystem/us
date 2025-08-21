@@ -171,12 +171,14 @@ func LonWestBias(coords []geom.Coord) []geom.Coord {
 	return coords
 }
 
+// Convert the LatLon points to a Polygon.
 func (latlon *LatLon) ToPolygon() (*geom.Polygon, error) {
 	polygon := geom.NewPolygon(geom.XY)
 
 	return polygon.SetCoords([][]geom.Coord{latlon.Coords})
 }
 
+// Convert the LatLon points to a MultiPolygon.
 func (latlon *LatLon) ToMultiPolygon() (*geom.MultiPolygon, error) {
 	polygon := geom.NewMultiPolygon(geom.XY)
 
