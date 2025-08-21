@@ -2,6 +2,7 @@ package awips
 
 import (
 	"errors"
+	"fmt"
 	"regexp"
 	"strconv"
 
@@ -108,7 +109,7 @@ func Parse45Digit(text string) (float64, error) {
 	x := 0.0
 
 	if len(text) < 4 || len(text) > 5 {
-		return x, errors.New("string must be 4 or 5 digits")
+		return x, fmt.Errorf("string must be 4 or 5 digits, got %s (%d)", text, len(text))
 	}
 
 	n, err := strconv.Atoi(text)
