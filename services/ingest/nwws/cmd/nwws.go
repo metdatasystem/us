@@ -1,7 +1,7 @@
 package main
 
 import (
-	"github.com/metdatasystem/us/internal/ingest/nwws"
+	nwws "github.com/metdatasystem/us/services/ingest/nwws/internal"
 	"github.com/spf13/cobra"
 )
 
