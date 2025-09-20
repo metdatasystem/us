@@ -2,7 +2,6 @@ package awips
 
 import (
 	"errors"
-	"fmt"
 	"regexp"
 	"strconv"
 	"strings"
@@ -13,7 +12,7 @@ import (
 
 // The rules of TIME...MOT...LOC information in text products is defined in NWS directive 10-1701 section 5.7.
 
-const TMLRegexp = `(?m:^(TIME\.\.\.MOT\.\.\.LOC)([A-Za-z0-9 \n]*))`
+const TMLRegexp = `(?m:^(TIME\.\.\.MOT\.\.\.LOC)([A-Za-z0-9 \n]*))\n`
 
 type TML struct {
 	Original    string        `json:"original"`
@@ -42,7 +41,6 @@ func ParseTML(text string, issued time.Time) (*TML, error) {
 
 	trimRegexp := regexp.MustCompile(`[\s\n]+`)
 	original = trimRegexp.ReplaceAllString(original, " ")
-	fmt.Println(original)
 
 	// Split the string into segments. Segments are separated by spaces.
 	segments := strings.Split(original, " ")[1:]
@@ -84,7 +82,7 @@ func ParseTML(text string, issued time.Time) (*TML, error) {
 		if err != nil {
 			return nil, errors.New("could not parse longitude in TML: " + err.Error())
 		}
-		p, err := geom.NewPoint(geom.XY).SetCoords([]float64{float64(lon), float64(lat)})
+		p, err := geom.NewPoint(geom.XY).SetCoords([]float64{-float64(lon), float64(lat)})
 		if err != nil {
 			return nil, errors.New("could not create point in TML: " + err.Error())
 		}
