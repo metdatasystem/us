@@ -102,6 +102,29 @@ func GetUGCForStateMinimal(db *pgxpool.Pool, state string, ugcType string) ([]*U
 	return ugcs, nil
 }
 
+func GetUGCUnionGeomSimplified(db *pgxpool.Pool, ugcs []string) (*geos.Geom, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := db.Query(ctx, `
+	SELECT ST_Simplify(ST_Union(geom), 0.0025) FROM postgis.ugcs WHERE valid_to IS NULL AND ugc = ANY($1)
+	`, ugcs)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var geom *geos.Geom
+	if rows.Next() {
+		if err := rows.Scan(&geom); err != nil {
+			return nil, err
+		}
+	}
+
+	return geom, nil
+}
+
 type UGC struct {
 	ID        int        `json:"id,omitempty"`
 	UGC       string     `json:"ugc"` // UGC code

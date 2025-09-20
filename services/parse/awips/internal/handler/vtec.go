@@ -100,6 +100,12 @@ func (handler *vtecHandler) Handle() error {
 				continue
 			}
 
+			err = handler.warning(&segment, event, vtec, ugcs)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to create/update warning")
+				continue
+			}
+
 			switch vtec.Action {
 			case "NEW", "EXB", "EXA":
 				err = handler.ugcNew(&segment, event, vtec, ugcs)

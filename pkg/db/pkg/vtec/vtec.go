@@ -136,18 +136,18 @@ type VTECUpdate struct {
 	SpeedText     *string    `json:"speed_text"`
 	TMLTime       *time.Time `json:"tml_time"`
 	UGC           []string   `json:"ugc"`
-	Tornado       string     `json:"tornado"`
-	Damage        string     `json:"damage"`
-	HailThreat    string     `json:"hail_threat"`
-	HailTag       string     `json:"hail_tag"`
-	WindThreat    string     `json:"wind_threat"`
-	WindTag       string     `json:"wind_tag"`
-	FlashFlood    string     `json:"flash_flood"`
-	RainfallTag   string     `json:"rainfall_tag"`
-	FloodTagDam   string     `json:"flood_tag_dam"`
-	SpoutTag      string     `json:"spout_tag"`
-	SnowSquall    string     `json:"snow_squall"`
-	SnowSquallTag string     `json:"snow_squall_tag"`
+	Tornado       string     `json:"tornado,omitempty"`
+	Damage        string     `json:"damage,omitempty"`
+	HailThreat    string     `json:"hail_threat,omitempty"`
+	HailTag       string     `json:"hail_tag,omitempty"`
+	WindThreat    string     `json:"wind_threat,omitempty"`
+	WindTag       string     `json:"wind_tag,omitempty"`
+	FlashFlood    string     `json:"flash_flood,omitempty"`
+	RainfallTag   string     `json:"rainfall_tag,omitempty"`
+	FloodTagDam   string     `json:"flood_tag_dam,omitempty"`
+	SpoutTag      string     `json:"spout_tag,omitempty"`
+	SnowSquall    string     `json:"snow_squall,omitempty"`
+	SnowSquallTag string     `json:"snow_squall_tag,omitempty"`
 }
 
 func (update *VTECUpdate) scan(row pgx.Row) error {
