@@ -16,7 +16,7 @@ type AWIPS struct {
 // This regular expression is derived from NWS directive 10-1701 section 4.1.3.
 // The directive states that the AWIPS header is a 4 to 6 character string on its own line.
 // The string can contain letters and numbers.
-const AWIPSRegexp = `(?m:^[A-Z0-9 ]{4,6}[\n\r])`
+const AWIPSRegexp = `(?m:^[A-Z0-9]{4,6}[\n\r])`
 
 // Returns the AWIPS header from the given text.
 // If no header is found, the string is empty.
