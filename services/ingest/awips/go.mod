@@ -1,4 +1,4 @@
-module github.com/metdatasystem/us/services/ingest/nwws
+module github.com/metdatasystem/us/services/ingest/awips
 
 go 1.24.6
 

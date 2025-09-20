@@ -1,7 +1,7 @@
 package main
 
 import (
-	nwws "github.com/metdatasystem/us/services/ingest/nwws/internal"
+	"github.com/metdatasystem/us/services/ingest/awips/internal"
 	"github.com/spf13/cobra"
 )
 
@@ -12,6 +12,6 @@ var nwwsCmd = &cobra.Command{
 	Listens to an XMPP room available from NOAA and makes the messages available to other MDS services.
 	Requires NWWS credentials.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		nwws.Go()
+		internal.NWWS()
 	},
 }

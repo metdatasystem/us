@@ -30,6 +30,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&envFile, "env", ".env", "The env file to read.")
 
 	rootCmd.AddCommand(nwwsCmd)
+	rootCmd.AddCommand(localCmd)
 }
 
 func initConfig() {

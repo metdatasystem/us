@@ -1,9 +1,8 @@
-package nwws
+package internal
 
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
 	"fmt"
 	"log/slog"
 	"os"
@@ -13,14 +12,8 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/twmb/franz-go/pkg/kgo"
 	"github.com/xmppo/go-xmpp"
 )
-
-type Message struct {
-	Text       string    `json:"text"`
-	ReceivedAt time.Time `json:"receivedAt"`
-}
 
 type XmppConfig struct {
 	Server   string
@@ -30,7 +23,7 @@ type XmppConfig struct {
 	Resource string
 }
 
-func Go() {
+func NWWS() {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
@@ -84,21 +77,17 @@ func Go() {
 		return
 	}
 
-	// Create Kafka client
-	kafkaClient, err := kgo.NewClient(
-		kgo.SeedBrokers(os.Getenv("KAFKA_BROKER")),
-	)
-	if err != nil {
-		slog.Error("failed to create Kafka client", "error", err.Error())
-		return
-	}
-
 	// Track time of last received message
 	var lastReceived int64
 	// Messages per minute
 	var messageRate atomic.Uint64
 	// Channel to share messages
-	messages := make(chan Message)
+
+	producer, err := NewProducer()
+	if err != nil {
+		slog.Error("failed to create producer", "error", err.Error())
+		return
+	}
 
 	// XMPP listening
 	go func() {
@@ -110,7 +99,7 @@ func Go() {
 			// Stop
 			case <-ctx.Done():
 				slog.Info("shutting down XMPP client")
-				close(messages)
+				close(producer.messages)
 				return
 			// Receive messages
 			default:
@@ -132,10 +121,7 @@ func Go() {
 							atomic.StoreInt64(&lastReceived, now.Unix())
 							// Share the message
 							slog.Debug("received message", "receivedAt", now.String())
-							messages <- Message{
-								Text:       text,
-								ReceivedAt: time.Now(),
-							}
+							producer.messages <- producer.NewMessage(text, now)
 							// Increment message rate
 							messageRate.Add(1)
 						}
@@ -162,32 +148,11 @@ func Go() {
 		}
 	}()
 
-	// Kafka producer
-	go func() {
-		for message := range messages {
-
-			data, err := json.Marshal(message)
-			if err != nil {
-				slog.Error("failed to marshal message", "error", err.Error())
-			}
-
-			record := &kgo.Record{
-				Topic: "us-awips-raw",
-				Value: data,
-			}
-			kafkaClient.Produce(context.Background(), record, func(r *kgo.Record, err error) {
-				if err != nil {
-					slog.Error("failed to produce message to Kafka", "error", err.Error())
-				} else {
-					slog.Debug("message produced to Kafka", "topic", r.Topic)
-				}
-			})
-		}
-	}()
+	go producer.Run()
 
 	<-ctx.Done()
 	slog.Info("shutting down")
-	kafkaClient.Close()
+	producer.Stop()
 
 }
 
