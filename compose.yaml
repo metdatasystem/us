@@ -1,0 +1,33 @@
+services:
+  mds-database:
+    container_name: mds-database-us
+    restart: unless-stopped
+    build:
+      context: ./database
+    command: -c 'config_file=/etc/postgresql/postgresql.conf'
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - mds-database-us:/var/lib/postgresql/data
+      - ./database/config/postgres.conf:/etc/postgresql/postgresql.conf
+      # - ./database/config/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - mds-us
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: [ "CMD", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+# Volumes
+volumes:
+  mds-database-us:
+    name: mds-database-us
+
+# Networks
+networks:
+  mds-us:
+    name: mds-us
