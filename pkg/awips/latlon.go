@@ -89,7 +89,7 @@ func ParseLatLonSegments(segments []string) ([]geom.Coord, error) {
 				return nil, err
 			}
 
-			points = append(points, geom.Coord{x, y})
+			points = append(points, geom.Coord{-x, y})
 		case 8:
 			coords, err := ParseCoord8(segment)
 			if err != nil {
@@ -151,6 +151,8 @@ func ParseCoord8(text string) (geom.Coord, error) {
 		lonFloat += 100.0
 	}
 
+	lonFloat = -lonFloat
+
 	return geom.Coord{lonFloat, latFloat}, nil
 
 }
@@ -183,4 +185,29 @@ func (latlon *LatLon) ToMultiPolygon() (*geom.MultiPolygon, error) {
 	polygon := geom.NewMultiPolygon(geom.XY)
 
 	return polygon.SetCoords([][][]geom.Coord{{latlon.Coords}})
+}
+
+func (latlon *LatLon) ToFloat() [][]float64 {
+	coords := [][]float64{}
+	for _, coord := range latlon.Coords {
+		coords = append(coords, []float64{coord.X(), coord.Y()})
+	}
+
+	return coords
+}
+
+func (latlon *LatLon) ToFloatClosing() [][]float64 {
+	coords := latlon.ToFloat()
+
+	if coords[0][0] != coords[len(coords)-1][0] || coords[0][1] != coords[len(coords)-1][1] {
+		coords = append(coords, coords[0])
+	}
+
+	return coords
+}
+
+func (latlon *LatLon) SetWestCoords() {
+	for _, coord := range latlon.Coords {
+		coord[0] = -coord.X()
+	}
 }
