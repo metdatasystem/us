@@ -1,0 +1,9 @@
+go 1.24.7
+
+use (
+	./pkg/awips
+	./pkg/db
+	./services/ingest/awips
+	./services/parse/awips
+	./scripts/shapefiler
+)
