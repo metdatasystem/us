@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/tls"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -12,6 +11,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/xmppo/go-xmpp"
 )
 
@@ -23,11 +24,13 @@ type XmppConfig struct {
 	Resource string
 }
 
-func NWWS() {
+func NWWS(logLevel zerolog.Level) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	slog.SetLogLoggerLevel(slog.LevelDebug)
+	fmt.Println(logLevel)
+
+	zerolog.SetGlobalLevel(logLevel)
 
 	// Configure the XMPP client
 	xmppConfig := XmppConfig{
@@ -40,7 +43,7 @@ func NWWS() {
 
 	err := xmppConfig.check()
 	if err != nil {
-		slog.Error("NWWS configuration is invalid", "error", err.Error())
+		log.Error().Err(err).Msg("NWWS configuration is invalid")
 		return
 	}
 
@@ -64,16 +67,16 @@ func NWWS() {
 	// Create the XMPP client
 	client, err := options.NewClient()
 	if err != nil {
-		slog.Error("failed to create XMPP client", "error", err.Error())
+		log.Error().Err(err).Msg("failed to create XMPP client")
 		return
 	}
 
-	slog.Info(fmt.Sprintf("\033[32m *** Connected to %s *** \033[m", xmppConfig.Server))
+	log.Info().Msgf("connected to %s", xmppConfig.Server)
 
 	// Send presence to the room
 	_, err = client.SendOrg(fmt.Sprintf(`<presence xml:lang='en' from='%s@%s' to='%s@%s/%s'><x></x></presence>`, xmppConfig.User, xmppConfig.Server, xmppConfig.Resource, xmppConfig.Room, xmppConfig.User))
 	if err != nil {
-		slog.Error("failed to send presence", "error", err.Error())
+		log.Error().Err(err).Msg("failed to send presence")
 		return
 	}
 
@@ -85,7 +88,7 @@ func NWWS() {
 
 	producer, err := NewProducer()
 	if err != nil {
-		slog.Error("failed to create producer", "error", err.Error())
+		log.Error().Err(err).Msg("failed to create producer")
 		return
 	}
 
@@ -93,19 +96,19 @@ func NWWS() {
 	go func() {
 		defer client.Close()
 
-		slog.Info(fmt.Sprintf("\033[32m *** Listening to %s *** \033[m", xmppConfig.Server))
+		log.Info().Msgf("listening to %s", xmppConfig.Server)
 		for {
 			select {
 			// Stop
 			case <-ctx.Done():
-				slog.Info("shutting down XMPP client")
+				log.Warn().Msg("shutting down XMPP client")
 				close(producer.messages)
 				return
 			// Receive messages
 			default:
 				chat, err := client.Recv()
 				if err != nil {
-					slog.Error("failed to receive message", "error", err.Error())
+					log.Error().Err(err).Msg("failed to receive messgae")
 					continue
 				}
 
@@ -120,7 +123,7 @@ func NWWS() {
 							now := time.Now()
 							atomic.StoreInt64(&lastReceived, now.Unix())
 							// Share the message
-							slog.Debug("received message", "receivedAt", now.String())
+							log.Debug().Time("received", now).Msg("received message")
 							producer.messages <- producer.NewMessage(text, now)
 							// Increment message rate
 							messageRate.Add(1)
@@ -139,9 +142,9 @@ func NWWS() {
 		case <-time.After(time.Minute):
 			last := atomic.LoadInt64(&lastReceived)
 			if last == 0 || time.Now().Unix()-last > 60 {
-				slog.Warn("no messages received in the last minute", "messagesLastMinute", messageRate.Load())
+				log.Warn().Uint64("messagesLastMinute", messageRate.Load()).Msg("no messages received in the last minute")
 			} else {
-				slog.Debug("healthy", "messagesLastMinute", messageRate.Load())
+				log.Debug().Uint64("messagesLastMinute", messageRate.Load()).Msg("healthy")
 			}
 			// Reset message rate
 			messageRate.Swap(0)
@@ -151,7 +154,7 @@ func NWWS() {
 	go producer.Run()
 
 	<-ctx.Done()
-	slog.Info("shutting down")
+	log.Warn().Msg("shutting down")
 	producer.Stop()
 
 }

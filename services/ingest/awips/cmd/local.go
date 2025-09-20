@@ -14,7 +14,7 @@ var localCmd = &cobra.Command{
 	Listens to an XMPP room available from NOAA and makes the messages available to other MDS services.
 	Requires NWWS credentials.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		internal.Local(path)
+		internal.Local(path, logLevel)
 	},
 }
 

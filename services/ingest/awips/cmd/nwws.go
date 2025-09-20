@@ -12,6 +12,6 @@ var nwwsCmd = &cobra.Command{
 	Listens to an XMPP room available from NOAA and makes the messages available to other MDS services.
 	Requires NWWS credentials.`,
 	Run: func(cmd *cobra.Command, args []string) {
-		internal.NWWS()
+		internal.NWWS(logLevel)
 	},
 }

@@ -4,10 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"time"
 
+	"github.com/rs/zerolog/log"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
@@ -51,7 +51,7 @@ func (p *Producer) Run() {
 
 		err := p.SendMessage(message)
 		if err != nil {
-			slog.Error("failed to send message", "error", err.Error())
+			log.Error().Err(err).Msg("failed to send message")
 		}
 
 	}

@@ -1,19 +1,22 @@
 package internal
 
 import (
-	"log/slog"
 	"os"
 	"time"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 var producer *Producer
 var t = time.Now()
 
-func Local(path string) {
+func Local(path string, loglevel zerolog.Level) {
 	var err error
 	producer, err = NewProducer()
 	if err != nil {
-		slog.Error("failed to create producer", "error", err.Error())
+		log.Error().Err(err).Msg("failed to create producer")
+		return
 	}
 
 	process(path)
@@ -25,21 +28,21 @@ func Local(path string) {
 func process(path string) {
 	file, err := os.Open(path)
 	if err != nil {
-		slog.Error("failed to open file", "error", err.Error())
+		log.Error().Err(err).Msg("failed to open file")
 		return
 	}
 	defer file.Close()
 
 	stat, err := file.Stat()
 	if err != nil {
-		slog.Error("failed to stat file", "error", err.Error())
+		log.Error().Err(err).Msg("failed to stat file")
 		return
 	}
 
 	if stat.IsDir() {
 		files, err := file.ReadDir(0)
 		if err != nil {
-			slog.Error("failed to read directory", "error", err.Error())
+			log.Error().Err(err).Msg("failed to read directory")
 			return
 		}
 
@@ -55,16 +58,16 @@ func processFile(file *os.File, size int64) {
 	data := make([]byte, size)
 	_, err := file.Read(data)
 	if err != nil {
-		slog.Error("failed to read file", "error", err.Error())
+		log.Error().Err(err).Msg("failed to read file")
 	}
 
 	if producer == nil {
-		slog.Error("producer is nil")
+		log.Error().Err(err).Msg("producer is nil")
 		return
 	}
 	message := producer.NewMessage(string(data), t)
 	err = producer.SendMessage(message)
 	if err != nil {
-		slog.Error("failed to send message", "error", err.Error())
+		log.Error().Err(err).Msg("failed to send message")
 	}
 }
