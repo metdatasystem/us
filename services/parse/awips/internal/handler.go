@@ -1,4 +1,4 @@
-package handler
+package internal
 
 import (
 	"regexp"
@@ -6,7 +6,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/metdatasystem/us/pkg/awips"
-	dbAwips "github.com/metdatasystem/us/pkg/db/pkg/awips"
+	"github.com/metdatasystem/us/pkg/models"
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
 	"github.com/twmb/franz-go/pkg/kgo"
@@ -37,7 +37,7 @@ var routes = []Route{
 type Handler struct {
 	db        *pgxpool.Pool
 	kafka     *kgo.Client
-	dbProduct *dbAwips.Product
+	dbProduct *models.AWIPSProduct
 	product   *awips.Product
 	log       zerolog.Logger
 }

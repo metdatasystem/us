@@ -1,12 +1,12 @@
-package handler
+package internal
 
 import (
 	"context"
 	"time"
 
 	"github.com/metdatasystem/us/pkg/awips"
-	"github.com/metdatasystem/us/pkg/db/pkg/postgis"
-	dbVTEC "github.com/metdatasystem/us/pkg/db/pkg/vtec"
+	"github.com/metdatasystem/us/pkg/db"
+	"github.com/metdatasystem/us/pkg/models"
 	"github.com/twpayne/go-geos"
 )
 
@@ -44,8 +44,14 @@ func (handler *vtecHandler) Handle() error {
 				year = product.Issued.Year()
 			}
 
+			// VTECs may not have an end time but we will give them one.
+			if vtec.End == nil {
+				// Use the expiry of the product for the end time
+				vtec.End = &segment.Expires
+			}
+
 			// Try and find the event in the database
-			event, err := dbVTEC.FindEvent(handler.db, vtec.WFO, vtec.Phenomena, vtec.Significance, vtec.EventNumber, year)
+			event, err := db.FindVTECEvent(handler.db, vtec.WFO, vtec.Phenomena, vtec.Significance, vtec.EventNumber, year)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to find vtec event")
 				continue
@@ -55,7 +61,7 @@ func (handler *vtecHandler) Handle() error {
 			if event == nil {
 				log.Info().Msg("inserting new vtec event")
 
-				event = &dbVTEC.VTECEvent{
+				event = &models.VTECEvent{
 					Issued:       product.Issued,
 					Starts:       vtec.Start,
 					Expires:      segment.UGC.Expires,
@@ -72,7 +78,7 @@ func (handler *vtecHandler) Handle() error {
 					IsPDS:        segment.IsPDS(),
 				}
 
-				err = event.Insert(handler.db)
+				err = db.InsertVTECEvent(handler.db, event)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to insert vtec event")
 					continue
@@ -122,7 +128,7 @@ func (handler *vtecHandler) Handle() error {
 	return nil
 }
 
-func (handler *vtecHandler) updateTimes(segment awips.ProductSegment, event *dbVTEC.VTECEvent, vtec awips.VTEC) {
+func (handler *vtecHandler) updateTimes(segment awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC) {
 	product := handler.product
 	log := handler.log
 
@@ -160,7 +166,7 @@ func (handler *vtecHandler) updateTimes(segment awips.ProductSegment, event *dbV
 	}
 }
 
-func (handler *vtecHandler) createUpdate(segment *awips.ProductSegment, event *dbVTEC.VTECEvent, vtec awips.VTEC, ugcs []*postgis.UGCMinimal) error {
+func (handler *vtecHandler) createUpdate(segment *awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC, ugcs []*models.UGCMinimal) error {
 
 	product := handler.product
 	dbProduct := handler.dbProduct
@@ -196,7 +202,7 @@ func (handler *vtecHandler) createUpdate(segment *awips.ProductSegment, event *d
 		tmlTime = &segment.TML.Time
 	}
 
-	update := &dbVTEC.VTECUpdate{
+	update := &models.VTECUpdate{
 		Issued:        product.Issued,
 		Starts:        event.Starts,
 		Expires:       segment.UGC.Expires,
@@ -234,7 +240,7 @@ func (handler *vtecHandler) createUpdate(segment *awips.ProductSegment, event *d
 		SnowSquallTag: segment.Tags["snowSquallImpact"],
 	}
 
-	err := update.Insert(handler.db)
+	err := db.InsertVTECUpdate(handler.db, update)
 	if err != nil {
 		return err
 	}
@@ -242,14 +248,16 @@ func (handler *vtecHandler) createUpdate(segment *awips.ProductSegment, event *d
 	return nil
 }
 
-func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *dbVTEC.VTECEvent, vtec awips.VTEC, ugcs []*postgis.UGCMinimal) error {
+func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC, ugcs []*models.UGCMinimal) error {
 
 	dbProduct := handler.dbProduct
 	log := handler.log
 
 	start := event.Starts
-	if start.Equal(*dbProduct.Issued) {
-		start = dbProduct.Issued
+	if start != nil {
+		if start.Equal(*dbProduct.Issued) {
+			start = dbProduct.Issued
+		}
 	}
 
 	// The product expires at the UGC expiry time
@@ -262,7 +270,7 @@ func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *dbVTEC.
 		end = *vtec.End
 	}
 
-	currentUGCs, err := dbVTEC.FindCurrentUGCsForEvent(handler.db, event.WFO, event.Phenomena, event.Significance, event.EventNumber, event.Year, expires)
+	currentUGCs, err := db.FindCurrentVTECEventUGCs(handler.db, event.WFO, event.Phenomena, event.Significance, event.EventNumber, event.Year, expires)
 	if err != nil {
 		return err
 	}
@@ -270,10 +278,10 @@ func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *dbVTEC.
 	duplicates := 0
 	deleted := 0
 
-	approved := []*postgis.UGCMinimal{}
+	approved := []*models.UGCMinimal{}
 
 	for _, ugc := range ugcs {
-		var current *dbVTEC.VTECUGC
+		var current *models.VTECUGC
 		for _, c := range currentUGCs {
 			if ugc.ID == c.UGC {
 				current = c
@@ -283,7 +291,7 @@ func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *dbVTEC.
 		if current != nil {
 			// If the product was reissued as a correction, delete the existing UGC since it may not be valid anymore
 			if handler.product.IsCorrection() && current.Action == vtec.Action {
-				current.Delete(handler.db)
+				db.DeleteVTECUGC(handler.db, current)
 				deleted++
 			}
 			duplicates++
@@ -297,7 +305,7 @@ func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *dbVTEC.
 	}
 
 	for _, ugc := range approved {
-		newUGC := &dbVTEC.VTECUGC{
+		newUGC := &models.VTECUGC{
 			WFO:          event.WFO,
 			Phenomena:    event.Phenomena,
 			Significance: event.Significance,
@@ -312,7 +320,7 @@ func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *dbVTEC.
 			Year:         event.Year,
 		}
 
-		err = newUGC.Insert(handler.db)
+		err = db.InsertVTECUGC(handler.db, newUGC)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to insert new vtec ugc")
 		}
@@ -321,7 +329,7 @@ func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *dbVTEC.
 	return nil
 }
 
-func (handler *vtecHandler) ugcUpdate(segment *awips.ProductSegment, event *dbVTEC.VTECEvent, vtec awips.VTEC, ugcs []*postgis.UGCMinimal) error {
+func (handler *vtecHandler) ugcUpdate(segment *awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC, ugcs []*models.UGCMinimal) error {
 
 	expires := segment.UGC.Expires
 	end := event.Ends
@@ -331,10 +339,10 @@ func (handler *vtecHandler) ugcUpdate(segment *awips.ProductSegment, event *dbVT
 		u = append(u, ugc.ID)
 	}
 
-	return dbVTEC.BulkUpdateUGCsById(handler.db, u, expires, end, vtec.Action, event.WFO, event.Phenomena, event.Significance, event.EventNumber, event.Year)
+	return db.BulkUpdateUGCsById(handler.db, u, expires, end, vtec.Action, event.WFO, event.Phenomena, event.Significance, event.EventNumber, event.Year)
 }
 
-func (handler *vtecHandler) updateEvent(segment *awips.ProductSegment, event *dbVTEC.VTECEvent, vtec awips.VTEC) {
+func (handler *vtecHandler) updateEvent(segment *awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

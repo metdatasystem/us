@@ -1,27 +1,47 @@
-package awips
+package internal
 
 import (
-	"context"
-	"log/slog"
-	"os/signal"
-	"syscall"
+	"errors"
+	"time"
 
-	"github.com/metdatasystem/us/services/parse/awips/internal/server"
+	"github.com/metdatasystem/us/pkg/awips"
+	"github.com/metdatasystem/us/pkg/db"
+	"github.com/metdatasystem/us/pkg/models"
 )
 
-func Go() {
-	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
-	defer stop()
+type productHandler struct {
+	Handler
+}
 
-	server, err := server.New(ctx)
-	if err != nil {
-		slog.Error("failed to create server instance", "error", err.Error())
-		return
+// Inserts the AWIPS product into the database
+func (handler *productHandler) Handle(product awips.Product, receivedAt time.Time) (*models.AWIPSProduct, error) {
+
+	source := product.Office
+	bbb := product.WMO.BBB
+
+	if product.Issued.IsZero() {
+		return nil, errors.New("product has no issuance time")
 	}
 
-	server.Run()
+	// Generate the product ID
+	id := models.GenerateAWIPSProductID(product.Issued, product.Office, product.WMO.Datatype, product.AWIPS.Original, product.WMO.BBB)
 
-	<-ctx.Done()
-	server.Stop()
+	// Build the product
+	awipsProduct := &models.AWIPSProduct{
+		ProductID:  id,
+		ReceivedAt: &receivedAt,
+		Issued:     &product.Issued,
+		Source:     source,
+		Data:       product.Text,
+		WMO:        product.WMO.Datatype,
+		AWIPS:      product.AWIPS.Original,
+		BBB:        bbb,
+	}
 
+	awipsProduct, err := db.InsertAWIPSProduct(handler.db, id, awipsProduct)
+	if err != nil {
+		return nil, err
+	}
+
+	return awipsProduct, nil
 }

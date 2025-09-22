@@ -1,32 +1,30 @@
-package handler
+package internal
 
 import (
-	"fmt"
 	"time"
 
 	"github.com/metdatasystem/us/pkg/awips"
-	"github.com/metdatasystem/us/pkg/db/pkg/postgis"
-	dbVTEC "github.com/metdatasystem/us/pkg/db/pkg/vtec"
-	"github.com/metdatasystem/us/pkg/db/pkg/warnings"
+	"github.com/metdatasystem/us/pkg/db"
+	"github.com/metdatasystem/us/pkg/kafka"
+	"github.com/metdatasystem/us/pkg/models"
 	"github.com/twpayne/go-geos"
 )
 
-func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *dbVTEC.VTECEvent, vtec awips.VTEC, ugcs []*postgis.UGCMinimal) error {
+func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC, ugcs []*models.UGCMinimal) error {
 	product := handler.product
 
-	ugc := []string{}
+	ugcList := []string{}
 	for _, u := range ugcs {
-		ugc = append(ugc, u.UGC)
+		ugcList = append(ugcList, u.UGC)
 	}
-
-	fmt.Println(ugc)
 
 	var geom *geos.Geom
 	if segment.LatLon != nil {
 		coords := segment.LatLon.ToFloatClosing()
 		geom = geos.NewPolygon([][][]float64{coords})
 	} else {
-		g, err := postgis.GetUGCUnionGeomSimplified(handler.db, ugc)
+
+		g, err := db.GetUGCUnionGeomSimplified(handler.db, ugcList)
 		if err != nil {
 			return err
 		}
@@ -54,22 +52,21 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *dbVTEC
 		tmlTime = &segment.TML.Time
 	}
 
-	warning, err := warnings.GetWarning(handler.db, event.WFO, event.Phenomena, event.Significance, event.EventNumber, event.Year)
+	warning, err := db.FindWarning(handler.db, event.WFO, event.Phenomena, event.Significance, event.EventNumber, event.Year)
 	if err != nil {
 		return err
 	}
 
 	// Warning exists and can be updated
 	if warning != nil {
+
+		updatedUGC := append([]string{}, ugcList...)
+
 		for _, ugc := range warning.UGC {
-			switch warning.Action {
-			case "CAN":
-				fallthrough
-			case "UPG":
-				fallthrough
-			case "EXP":
+			switch vtec.Action {
+			case "CAN", "UPG", "EXP":
 				index := -1
-				for i, u := range warning.UGC {
+				for i, u := range updatedUGC {
 					if u == ugc {
 						index = i
 					}
@@ -77,8 +74,8 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *dbVTEC
 
 				if index > -1 {
 					ret := make([]string, 0)
-					ret = append(ret, warning.UGC[:index]...)
-					warning.UGC = append(ret, warning.UGC[index+1:]...)
+					ret = append(ret, updatedUGC[:index]...)
+					updatedUGC = append(ret, updatedUGC[index+1:]...)
 				}
 			default:
 				index := -1
@@ -89,7 +86,7 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *dbVTEC
 				}
 
 				if index == -1 {
-					warning.UGC = append(warning.UGC, ugc)
+					updatedUGC = append(updatedUGC, ugc)
 				} else {
 
 				}
@@ -109,6 +106,7 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *dbVTEC
 		warning.Speed = speed
 		warning.SpeedText = speedText
 		warning.TMLTime = tmlTime
+		warning.UGC = updatedUGC
 		warning.Tornado = segment.Tags["tornado"]
 		warning.Damage = segment.Tags["damage"]
 		warning.HailThreat = segment.Tags["hailThreat"]
@@ -122,11 +120,12 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *dbVTEC
 		warning.SnowSquall = segment.Tags["snowSquall"]
 		warning.SnowSquallTag = segment.Tags["snowSquallImpact"]
 
-		if err := warning.Update(handler.db); err != nil {
+		if err := db.UpdateWarning(handler.db, warning); err != nil {
 			return err
 		}
 	} else {
-		warning = &warnings.Warning{
+
+		warning = &models.Warning{
 			Issued:        product.Issued,
 			Starts:        event.Starts,
 			Expires:       segment.UGC.Expires,
@@ -149,7 +148,7 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *dbVTEC
 			Speed:         speed,
 			SpeedText:     speedText,
 			TMLTime:       tmlTime,
-			UGC:           ugc,
+			UGC:           ugcList,
 			Tornado:       segment.Tags["tornado"],
 			Damage:        segment.Tags["damage"],
 			HailThreat:    segment.Tags["hailThreat"],
@@ -164,12 +163,30 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *dbVTEC
 			SnowSquallTag: segment.Tags["snowSquallImpact"],
 		}
 
-		err = warning.Insert(handler.db)
+		err = db.InsertWarning(handler.db, warning)
 		if err != nil {
 			return err
 		}
 
 	}
 
-	return nil
+	var eventType string
+	switch warning.Action {
+	case "NEW", "EXA", "EXB":
+		eventType = kafka.EventNew
+	case "CAN", "UPG":
+		eventType = kafka.EventDelete
+	default:
+		eventType = kafka.EventUpdate
+	}
+
+	kafkaEvent := &kafka.EventEnvelope{
+		EventType: eventType,
+		Product:   "warning",
+		ID:        warning.GenerateID(),
+		Timestamp: product.Issued,
+		Data:      warning,
+	}
+
+	return kafka.PublishEvent(handler.kafka, kafkaEvent, "us-warnings")
 }
