@@ -2,23 +2,18 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/metdatasystem/us/pkg/kafka"
 	"github.com/rs/zerolog/log"
 	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-type Message struct {
-	Text       string    `json:"text"`
-	ReceivedAt time.Time `json:"receivedAt"`
-}
-
 type Producer struct {
 	client   *kgo.Client
-	messages chan *Message
+	messages chan *kafka.EventEnvelope
 	done     bool
 }
 
@@ -32,9 +27,14 @@ func NewProducer() (*Producer, error) {
 		return nil, fmt.Errorf("failed to create Kafka client: %v", err)
 	}
 
+	err = client.Ping(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to ping Kafka client: %v", err)
+	}
+
 	producer := &Producer{
 		client:   client,
-		messages: make(chan *Message),
+		messages: make(chan *kafka.EventEnvelope),
 		done:     false,
 	}
 
@@ -61,8 +61,8 @@ func (p *Producer) Stop() {
 	p.done = true
 }
 
-func (p *Producer) SendMessage(message *Message) error {
-	data, err := json.Marshal(message)
+func (p *Producer) SendMessage(message *kafka.EventEnvelope) error {
+	data, err := message.Marshal()
 	if err != nil {
 		return fmt.Errorf("failed to marshal message: %v", err.Error())
 	}
@@ -79,9 +79,11 @@ func (p *Producer) SendMessage(message *Message) error {
 	return nil
 }
 
-func (p *Producer) NewMessage(text string, receivedAt time.Time) *Message {
-	return &Message{
-		Text:       text,
-		ReceivedAt: time.Now(),
+func (p *Producer) NewMessage(text string, receivedAt time.Time) *kafka.EventEnvelope {
+	return &kafka.EventEnvelope{
+		EventType: kafka.EventNew,
+		Product:   "awips-raw",
+		Data:      text,
+		Timestamp: time.Now(),
 	}
 }
