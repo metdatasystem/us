@@ -1,4 +1,4 @@
-package warnings
+package db
 
 import (
 	"context"
@@ -6,77 +6,10 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/twpayne/go-geos"
+	"github.com/metdatasystem/us/pkg/models"
 )
 
-type Warning struct {
-	ID            int        `json:"id"`
-	CreatedAt     time.Time  `json:"created_at,omitzero"`
-	UpdatedAt     time.Time  `json:"updated_at,omitzero"`
-	Issued        time.Time  `json:"issued"`
-	Starts        *time.Time `json:"starts,omitzero"`
-	Expires       time.Time  `json:"expires"`
-	Ends          time.Time  `json:"ends,omitzero"`
-	EndInitial    time.Time  `json:"end_initial,omitzero"`
-	Text          string     `json:"text"`
-	WFO           string     `json:"wfo"`
-	Action        string     `json:"action"`
-	Class         string     `json:"class"`
-	Phenomena     string     `json:"phenomena"`
-	Significance  string     `json:"significance"`
-	EventNumber   int        `json:"event_number"`
-	Year          int        `json:"year"`
-	Title         string     `json:"title"`
-	IsEmergency   bool       `json:"is_emergency"`
-	IsPDS         bool       `json:"is_pds"`
-	Geom          *geos.Geom `json:"geom,omitempty"`
-	Direction     *int       `json:"direction"`
-	Location      *geos.Geom `json:"location"`
-	Speed         *int       `json:"speed"`
-	SpeedText     *string    `json:"speed_text"`
-	TMLTime       *time.Time `json:"tml_time"`
-	UGC           []string   `json:"ugc"`
-	Tornado       string     `json:"tornado,omitempty"`
-	Damage        string     `json:"damage,omitempty"`
-	HailThreat    string     `json:"hail_threat,omitempty"`
-	HailTag       string     `json:"hail_tag,omitempty"`
-	WindThreat    string     `json:"wind_threat,omitempty"`
-	WindTag       string     `json:"wind_tag,omitempty"`
-	FlashFlood    string     `json:"flash_flood,omitempty"`
-	RainfallTag   string     `json:"rainfall_tag,omitempty"`
-	FloodTagDam   string     `json:"flood_tag_dam,omitempty"`
-	SpoutTag      string     `json:"spout_tag,omitempty"`
-	SnowSquall    string     `json:"snow_squall,omitempty"`
-	SnowSquallTag string     `json:"snow_squall_tag,omitempty"`
-}
-
-func GetWarning(db *pgxpool.Pool, wfo string, phenomena string, significance string, eventNumber int, year int) (*Warning, error) {
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-	defer cancel()
-
-	rows, err := db.Query(ctx, `
-	SELECT * FROM warnings.warnings WHERE wfo = $1 AND phenomena = $2 AND significance = $3 AND event_number = $4 AND year = $5
-	`, wfo, phenomena, significance, eventNumber, year)
-	if err != nil {
-		return nil, err
-	}
-
-	defer rows.Close()
-
-	var warning *Warning
-	if rows.Next() {
-		warning = &Warning{}
-		if err := warning.scan(rows); err != nil {
-			return nil, err
-		}
-	} else {
-		return nil, nil
-	}
-
-	return warning, nil
-}
-
-func (warning *Warning) scan(row pgx.Rows) error {
+func ScanWarning(row pgx.Row, warning *models.Warning) error {
 	return row.Scan(
 		&warning.ID,
 		&warning.CreatedAt,
@@ -119,7 +52,31 @@ func (warning *Warning) scan(row pgx.Rows) error {
 	)
 }
 
-func (warning *Warning) Insert(db *pgxpool.Pool) error {
+func FindWarning(db *pgxpool.Pool, wfo string, phenomena string, significance string, eventNumber int, year int) (*models.Warning, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := db.Query(ctx, `
+	SELECT * FROM warnings.warnings WHERE wfo = $1 AND phenomena = $2 AND significance = $3 AND event_number = $4 AND year = $5
+	`, wfo, phenomena, significance, eventNumber, year)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var warning *models.Warning
+	if rows.Next() {
+		warning = &models.Warning{}
+		if err := ScanWarning(rows, warning); err != nil {
+			return nil, err
+		}
+	}
+
+	return warning, nil
+}
+
+func InsertWarning(db *pgxpool.Pool, warning *models.Warning) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -176,7 +133,7 @@ func (warning *Warning) Insert(db *pgxpool.Pool) error {
 	}
 
 	if rows.Next() {
-		if err := warning.scan(rows); err != nil {
+		if err := ScanWarning(rows, warning); err != nil {
 			return err
 		}
 	}
@@ -184,7 +141,7 @@ func (warning *Warning) Insert(db *pgxpool.Pool) error {
 	return nil
 }
 
-func (warning *Warning) Update(db *pgxpool.Pool) error {
+func UpdateWarning(db *pgxpool.Pool, warning *models.Warning) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

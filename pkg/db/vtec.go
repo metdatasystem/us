@@ -1,4 +1,4 @@
-package vtec
+package db
 
 import (
 	"context"
@@ -6,11 +6,11 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/twpayne/go-geos"
+	"github.com/metdatasystem/us/pkg/models"
 )
 
-// Find an event based on VTEC parameters
-func FindEvent(db *pgxpool.Pool, wfo string, phenomena string, significance string, eventNumber int, year int) (*VTECEvent, error) {
+// Find a VTEC event based on VTEC parameters
+func FindVTECEvent(db *pgxpool.Pool, wfo string, phenomena string, significance string, eventNumber int, year int) (*models.VTECEvent, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -26,41 +26,19 @@ func FindEvent(db *pgxpool.Pool, wfo string, phenomena string, significance stri
 	defer rows.Close()
 
 	// Scan the row into the event struct
-	event := &VTECEvent{}
+	var event *models.VTECEvent
 	if rows.Next() {
-		if err := event.scan(rows); err != nil {
+		event = &models.VTECEvent{}
+		if err := ScanVTECEvent(rows, event); err != nil {
 			return nil, err
 		}
-	} else {
-		event = nil
 	}
 
 	return event, nil
 }
 
-// Database model for a VTEC event
-type VTECEvent struct {
-	ID           int        `json:"id,omitempty"`
-	CreatedAt    time.Time  `json:"created_at"`
-	UpdatedAt    time.Time  `json:"updated_at"`
-	Issued       time.Time  `json:"issued"`
-	Starts       *time.Time `json:"starts"`
-	Expires      time.Time  `json:"expires"`
-	Ends         time.Time  `json:"ends"`
-	EndInitial   time.Time  `json:"end_initial"`
-	Class        string     `json:"class"`
-	Phenomena    string     `json:"phenomena"`
-	WFO          string     `json:"wfo"`
-	Significance string     `json:"significance"`
-	EventNumber  int        `json:"event_number"`
-	Year         int        `json:"year"`
-	Title        string     `json:"title"`
-	IsEmergency  bool       `json:"is_emergency"`
-	IsPDS        bool       `json:"is_pds"`
-}
-
-// Scan a row into the event struct
-func (event *VTECEvent) scan(rows pgx.Rows) error {
+// Scan a row into the VTEC Event struct
+func ScanVTECEvent(rows pgx.Rows, event *models.VTECEvent) error {
 	return rows.Scan(
 		&event.ID,
 		&event.CreatedAt,
@@ -82,8 +60,8 @@ func (event *VTECEvent) scan(rows pgx.Rows) error {
 	)
 }
 
-// Insert the VTEC event into the database
-func (event *VTECEvent) Insert(db *pgxpool.Pool) error {
+// Insert a VTEC event into the database
+func InsertVTECEvent(db *pgxpool.Pool, event *models.VTECEvent) error {
 
 	rows, err := db.Query(context.Background(), `
 				INSERT INTO vtec.events(issued, starts, expires, ends, end_initial, class, phenomena, wfo, 
@@ -101,7 +79,7 @@ func (event *VTECEvent) Insert(db *pgxpool.Pool) error {
 
 	// Scan the row into the event struct
 	if rows.Next() {
-		if err := event.scan(rows); err != nil {
+		if err := ScanVTECEvent(rows, event); err != nil {
 			return err
 		}
 	}
@@ -109,48 +87,7 @@ func (event *VTECEvent) Insert(db *pgxpool.Pool) error {
 	return nil
 }
 
-// Database model for a VTEC update
-type VTECUpdate struct {
-	ID            int        `json:"id"`
-	CreatedAt     time.Time  `json:"created_at,omitempty"`
-	Issued        time.Time  `json:"issued"`
-	Starts        *time.Time `json:"starts,omitempty"`
-	Expires       time.Time  `json:"expires"`
-	Ends          time.Time  `json:"ends,omitempty"`
-	Text          string     `json:"text"`
-	Product       string     `json:"product"`
-	WFO           string     `json:"wfo"`
-	Action        string     `json:"action"`
-	Class         string     `json:"class"`
-	Phenomena     string     `json:"phenomena"`
-	Significance  string     `json:"significance"`
-	EventNumber   int        `json:"event_number"`
-	Year          int        `json:"year"`
-	Title         string     `json:"title"`
-	IsEmergency   bool       `json:"is_emergency"`
-	IsPDS         bool       `json:"is_pds"`
-	Geom          *geos.Geom `json:"geom,omitempty"`
-	Direction     *int       `json:"direction"`
-	Location      *geos.Geom `json:"location"`
-	Speed         *int       `json:"speed"`
-	SpeedText     *string    `json:"speed_text"`
-	TMLTime       *time.Time `json:"tml_time"`
-	UGC           []string   `json:"ugc"`
-	Tornado       string     `json:"tornado,omitempty"`
-	Damage        string     `json:"damage,omitempty"`
-	HailThreat    string     `json:"hail_threat,omitempty"`
-	HailTag       string     `json:"hail_tag,omitempty"`
-	WindThreat    string     `json:"wind_threat,omitempty"`
-	WindTag       string     `json:"wind_tag,omitempty"`
-	FlashFlood    string     `json:"flash_flood,omitempty"`
-	RainfallTag   string     `json:"rainfall_tag,omitempty"`
-	FloodTagDam   string     `json:"flood_tag_dam,omitempty"`
-	SpoutTag      string     `json:"spout_tag,omitempty"`
-	SnowSquall    string     `json:"snow_squall,omitempty"`
-	SnowSquallTag string     `json:"snow_squall_tag,omitempty"`
-}
-
-func (update *VTECUpdate) scan(row pgx.Row) error {
+func ScanVTECUpdate(row pgx.Row, update *models.VTECUpdate) error {
 	return row.Scan(
 		&update.ID,
 		&update.CreatedAt,
@@ -192,7 +129,7 @@ func (update *VTECUpdate) scan(row pgx.Row) error {
 	)
 }
 
-func (update *VTECUpdate) Insert(db *pgxpool.Pool) error {
+func InsertVTECUpdate(db *pgxpool.Pool, update *models.VTECUpdate) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -215,7 +152,7 @@ func (update *VTECUpdate) Insert(db *pgxpool.Pool) error {
 	}
 
 	if rows.Next() {
-		if err := update.scan(rows); err != nil {
+		if err := ScanVTECUpdate(rows, update); err != nil {
 			return err
 		}
 	}
@@ -223,7 +160,7 @@ func (update *VTECUpdate) Insert(db *pgxpool.Pool) error {
 	return nil
 }
 
-func FindCurrentUGCsForEvent(db *pgxpool.Pool, wfo string, phenomena string, significance string, eventNumber int, year int, expires time.Time) ([]*VTECUGC, error) {
+func FindCurrentVTECEventUGCs(db *pgxpool.Pool, wfo string, phenomena string, significance string, eventNumber int, year int, expires time.Time) ([]*models.VTECUGC, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -235,10 +172,10 @@ func FindCurrentUGCsForEvent(db *pgxpool.Pool, wfo string, phenomena string, sig
 	}
 	defer rows.Close()
 
-	var ugcs []*VTECUGC
+	var ugcs []*models.VTECUGC
 	for rows.Next() {
-		ugc := &VTECUGC{}
-		if err := ugc.scan(rows); err != nil {
+		ugc := &models.VTECUGC{}
+		if err := ScanVTECUGC(rows, ugc); err != nil {
 			return nil, err
 		}
 		ugcs = append(ugcs, ugc)
@@ -247,26 +184,7 @@ func FindCurrentUGCsForEvent(db *pgxpool.Pool, wfo string, phenomena string, sig
 	return ugcs, nil
 }
 
-// Database model for a VTEC UGC relation
-type VTECUGC struct {
-	ID           int        `json:"id"`
-	CreatedAt    time.Time  `json:"created_at,omitempty"`
-	UpdatedAt    time.Time  `json:"updated_at,omitempty"`
-	WFO          string     `json:"wfo"`
-	Phenomena    string     `json:"phenomena"`
-	Significance string     `json:"significance"`
-	EventNumber  int        `json:"event_number"`
-	UGC          int        `json:"ugc"`
-	Issued       time.Time  `json:"issued"`
-	Starts       *time.Time `json:"starts,omitempty"`
-	Expires      time.Time  `json:"expires"`
-	Ends         time.Time  `json:"ends,omitempty"`
-	EndInitial   time.Time  `json:"end_initial,omitempty"`
-	Action       string     `json:"action"`
-	Year         int        `json:"year"`
-}
-
-func (ugc *VTECUGC) scan(rows pgx.Rows) error {
+func ScanVTECUGC(rows pgx.Rows, ugc *models.VTECUGC) error {
 	return rows.Scan(
 		&ugc.ID,
 		&ugc.CreatedAt,
@@ -286,7 +204,7 @@ func (ugc *VTECUGC) scan(rows pgx.Rows) error {
 	)
 }
 
-func (ugc *VTECUGC) Insert(db *pgxpool.Pool) error {
+func InsertVTECUGC(db *pgxpool.Pool, ugc *models.VTECUGC) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -303,7 +221,7 @@ func (ugc *VTECUGC) Insert(db *pgxpool.Pool) error {
 	defer rows.Close()
 
 	if rows.Next() {
-		if err := ugc.scan(rows); err != nil {
+		if err := ScanVTECUGC(rows, ugc); err != nil {
 			return err
 		}
 	}
@@ -324,7 +242,7 @@ func BulkUpdateUGCsById(db *pgxpool.Pool, ugcs []int, expires time.Time, ends ti
 	return err
 }
 
-func (ugc *VTECUGC) Delete(db *pgxpool.Pool) error {
+func DeleteVTECUGC(db *pgxpool.Pool, ugc *models.VTECUGC) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 

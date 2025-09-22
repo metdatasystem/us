@@ -1,4 +1,4 @@
-package postgis
+package db
 
 import (
 	"context"
@@ -6,11 +6,12 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/metdatasystem/us/pkg/models"
 	"github.com/twpayne/go-geos"
 )
 
 // Find a UGC by its code (e.g. "TXZ123" or "TXF123" for fire zones)
-func FindUGCByCode(db *pgxpool.Pool, ugcCode string) (*UGC, error) {
+func FindUGCByCode(db *pgxpool.Pool, ugcCode string) (*models.UGC, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -18,8 +19,8 @@ func FindUGCByCode(db *pgxpool.Pool, ugcCode string) (*UGC, error) {
 	SELECT * FROM postgis.ugcs WHERE ugc = $1 AND valid_to IS NULL
 	`, ugcCode)
 
-	ugc := &UGC{}
-	if err := ugc.scan(row); err != nil {
+	ugc := &models.UGC{}
+	if err := ScanUGC(row, ugc); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
@@ -31,7 +32,7 @@ func FindUGCByCode(db *pgxpool.Pool, ugcCode string) (*UGC, error) {
 
 // Find a UGC by its code (e.g. "TXZ123" or "TXF123" for fire zones)
 // but does not return geometry or area data
-func FindUGCByCodeMinimal(db *pgxpool.Pool, ugcCode string) (*UGCMinimal, error) {
+func FindUGCByCodeMinimal(db *pgxpool.Pool, ugcCode string) (*models.UGCMinimal, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -40,8 +41,8 @@ func FindUGCByCodeMinimal(db *pgxpool.Pool, ugcCode string) (*UGCMinimal, error)
 	FROM postgis.ugcs WHERE ugc = $1 AND valid_to IS NULL
 	`, ugcCode)
 
-	ugc := &UGCMinimal{}
-	if err := ugc.scan(row); err != nil {
+	ugc := &models.UGCMinimal{}
+	if err := ScanUGCMinimal(row, ugc); err != nil {
 		if err == pgx.ErrNoRows {
 			return nil, nil
 		}
@@ -52,7 +53,7 @@ func FindUGCByCodeMinimal(db *pgxpool.Pool, ugcCode string) (*UGCMinimal, error)
 }
 
 // Get all UGCs for a given state
-func GetUGCForState(db *pgxpool.Pool, state string, ugcType string) ([]*UGC, error) {
+func GetUGCForState(db *pgxpool.Pool, state string, ugcType string) ([]*models.UGC, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -64,10 +65,10 @@ func GetUGCForState(db *pgxpool.Pool, state string, ugcType string) ([]*UGC, err
 	}
 	defer rows.Close()
 
-	var ugcs []*UGC
+	var ugcs []*models.UGC
 	for rows.Next() {
-		ugc := &UGC{}
-		if err := ugc.scan(rows); err != nil {
+		ugc := &models.UGC{}
+		if err := ScanUGC(rows, ugc); err != nil {
 			return nil, err
 		}
 		ugcs = append(ugcs, ugc)
@@ -77,7 +78,7 @@ func GetUGCForState(db *pgxpool.Pool, state string, ugcType string) ([]*UGC, err
 }
 
 // Get all UGCs for a given state but without geometry or area data
-func GetUGCForStateMinimal(db *pgxpool.Pool, state string, ugcType string) ([]*UGCMinimal, error) {
+func GetUGCForStateMinimal(db *pgxpool.Pool, state string, ugcType string) ([]*models.UGCMinimal, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
@@ -90,10 +91,10 @@ func GetUGCForStateMinimal(db *pgxpool.Pool, state string, ugcType string) ([]*U
 	}
 	defer rows.Close()
 
-	var ugcs []*UGCMinimal
+	var ugcs []*models.UGCMinimal
 	for rows.Next() {
-		ugc := &UGCMinimal{}
-		if err := ugc.scan(rows); err != nil {
+		ugc := &models.UGCMinimal{}
+		if err := ScanUGCMinimal(rows, ugc); err != nil {
 			return nil, err
 		}
 		ugcs = append(ugcs, ugc)
@@ -117,6 +118,7 @@ func GetUGCUnionGeomSimplified(db *pgxpool.Pool, ugcs []string) (*geos.Geom, err
 
 	var geom *geos.Geom
 	if rows.Next() {
+		geom = &geos.Geom{}
 		if err := rows.Scan(&geom); err != nil {
 			return nil, err
 		}
@@ -125,23 +127,7 @@ func GetUGCUnionGeomSimplified(db *pgxpool.Pool, ugcs []string) (*geos.Geom, err
 	return geom, nil
 }
 
-type UGC struct {
-	ID        int        `json:"id,omitempty"`
-	UGC       string     `json:"ugc"` // UGC code
-	Name      string     `json:"name"`
-	State     string     `json:"state"`
-	Type      string     `json:"type"` // Either "C" (county) or "Z" (zone)
-	Number    int        `json:"number"`
-	Area      float64    `json:"area"`
-	Geom      *geos.Geom `json:"geom"`
-	CWA       []string   `json:"cwa"` // County Warning Area
-	IsMarine  bool       `json:"is_marine"`
-	IsFire    bool       `json:"is_fire"`
-	ValidFrom time.Time  `json:"valid_from"`
-	ValidTo   *time.Time `json:"valid_to"`
-}
-
-func (ugc *UGC) scan(row pgx.Row) error {
+func ScanUGC(row pgx.Row, ugc *models.UGC) error {
 	return row.Scan(
 		&ugc.ID,
 		&ugc.UGC,
@@ -159,21 +145,7 @@ func (ugc *UGC) scan(row pgx.Row) error {
 	)
 }
 
-type UGCMinimal struct {
-	ID        int        `json:"id,omitempty"`
-	UGC       string     `json:"ugc"` // UGC code
-	Name      string     `json:"name"`
-	State     string     `json:"state"`
-	Type      string     `json:"type"` // Either "C" (county) or "Z" (zone)
-	Number    int        `json:"number"`
-	CWA       []string   `json:"cwa"` // County Warning Area
-	IsMarine  bool       `json:"is_marine"`
-	IsFire    bool       `json:"is_fire"`
-	ValidFrom time.Time  `json:"valid_from"`
-	ValidTo   *time.Time `json:"valid_to"`
-}
-
-func (ugc *UGCMinimal) scan(row pgx.Row) error {
+func ScanUGCMinimal(row pgx.Row, ugc *models.UGCMinimal) error {
 	return row.Scan(
 		&ugc.ID,
 		&ugc.UGC,
