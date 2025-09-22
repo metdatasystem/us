@@ -3,6 +3,8 @@ go 1.24.7
 use (
 	./pkg/awips
 	./pkg/db
+	./pkg/models
+	./pkg/kafka
 	./services/ingest/awips
 	./services/parse/awips
 	./scripts/shapefiler
