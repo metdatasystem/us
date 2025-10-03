@@ -20,7 +20,7 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 	yesterday := time.Now().Add(time.Hour * -24)
 
 	if event.Ends.Before(yesterday) {
-		// return nil
+		return nil
 	}
 
 	ugcList := []string{}
@@ -97,7 +97,7 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 		warning.SnowSquallTag = segment.Tags["snowSquallImpact"]
 
 		// Publish before we override all the UGC data
-		err = handler.publishWarning(warning, product.Issued)
+		err = handler.publishWarning(warning)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to publish warning to kafka")
 		}
@@ -177,7 +177,7 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 			SnowSquallTag: segment.Tags["snowSquallImpact"],
 		}
 
-		err = handler.publishWarning(warning, product.Issued)
+		err = handler.publishWarning(warning)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to publish warning to kafka")
 		}
@@ -192,7 +192,7 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 	return nil
 }
 
-func (handler *vtecHandler) publishWarning(warning *models.Warning, issued time.Time) error {
+func (handler *vtecHandler) publishWarning(warning *models.Warning) error {
 	var eventType string
 	switch warning.Action {
 	case "NEW", "EXA", "EXB":
