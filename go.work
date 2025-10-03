@@ -1,0 +1,12 @@
+go 1.24.7
+
+use (
+	./pkg/awips
+	./pkg/db
+	./pkg/models
+	./pkg/streaming
+	./scripts/shapefiler
+	./services/ingest/awips
+	./services/live
+	./services/parse/awips
+)

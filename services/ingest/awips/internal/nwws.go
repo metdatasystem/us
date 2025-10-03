@@ -1,11 +1,10 @@
-package nwws
+package internal
 
 import (
 	"context"
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
-	"log/slog"
 	"os"
 	"os/signal"
 	"strings"
@@ -13,14 +12,11 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/twmb/franz-go/pkg/kgo"
+	"github.com/metdatasystem/us/pkg/streaming"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/xmppo/go-xmpp"
 )
-
-type Message struct {
-	Text       string    `json:"text"`
-	ReceivedAt time.Time `json:"receivedAt"`
-}
 
 type XmppConfig struct {
 	Server   string
@@ -30,11 +26,11 @@ type XmppConfig struct {
 	Resource string
 }
 
-func Go() {
+func NWWS(logLevel zerolog.Level) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	slog.SetLogLoggerLevel(slog.LevelDebug)
+	zerolog.SetGlobalLevel(logLevel)
 
 	// Configure the XMPP client
 	xmppConfig := XmppConfig{
@@ -47,7 +43,7 @@ func Go() {
 
 	err := xmppConfig.check()
 	if err != nil {
-		slog.Error("NWWS configuration is invalid", "error", err.Error())
+		log.Error().Err(err).Msg("NWWS configuration is invalid")
 		return
 	}
 
@@ -71,25 +67,16 @@ func Go() {
 	// Create the XMPP client
 	client, err := options.NewClient()
 	if err != nil {
-		slog.Error("failed to create XMPP client", "error", err.Error())
+		log.Error().Err(err).Msg("failed to create XMPP client")
 		return
 	}
 
-	slog.Info(fmt.Sprintf("\033[32m *** Connected to %s *** \033[m", xmppConfig.Server))
+	log.Info().Msgf("connected to %s", xmppConfig.Server)
 
 	// Send presence to the room
 	_, err = client.SendOrg(fmt.Sprintf(`<presence xml:lang='en' from='%s@%s' to='%s@%s/%s'><x></x></presence>`, xmppConfig.User, xmppConfig.Server, xmppConfig.Resource, xmppConfig.Room, xmppConfig.User))
 	if err != nil {
-		slog.Error("failed to send presence", "error", err.Error())
-		return
-	}
-
-	// Create Kafka client
-	kafkaClient, err := kgo.NewClient(
-		kgo.SeedBrokers(os.Getenv("KAFKA_BROKER")),
-	)
-	if err != nil {
-		slog.Error("failed to create Kafka client", "error", err.Error())
+		log.Error().Err(err).Msg("failed to send presence")
 		return
 	}
 
@@ -98,25 +85,30 @@ func Go() {
 	// Messages per minute
 	var messageRate atomic.Uint64
 	// Channel to share messages
-	messages := make(chan Message)
+
+	producer, err := NewProducer()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create producer")
+		return
+	}
 
 	// XMPP listening
 	go func() {
 		defer client.Close()
 
-		slog.Info(fmt.Sprintf("\033[32m *** Listening to %s *** \033[m", xmppConfig.Server))
+		log.Info().Msgf("listening to %s", xmppConfig.Server)
 		for {
 			select {
 			// Stop
 			case <-ctx.Done():
-				slog.Info("shutting down XMPP client")
-				close(messages)
+				log.Warn().Msg("shutting down XMPP client")
+				close(producer.messages)
 				return
 			// Receive messages
 			default:
 				chat, err := client.Recv()
 				if err != nil {
-					slog.Error("failed to receive message", "error", err.Error())
+					log.Error().Err(err).Msg("failed to receive messgae")
 					continue
 				}
 
@@ -125,17 +117,52 @@ func Go() {
 					for _, elem := range v.OtherElem {
 						// NWWS-OI uses 'x' as the XML element containing the raw text
 						if elem.XMLName.Local == "x" {
+							now := time.Now()
+							log.Debug().Time("received", now).Msg("received message")
+							// Get attributes
+							var issued *time.Time = nil
+							var ttaaii string
+							var cccc string
+							var awips string
+							for _, attr := range elem.Attr {
+								switch attr.Name.Local {
+								case "issue":
+									t, err := time.Parse("2006-01-02T15:04:05Z", attr.Value)
+									if err != nil {
+										log.Error().Err(err).Msg("failed to parse x element issue time")
+										continue
+									}
+									issued = &t
+								case "ttaaii":
+									ttaaii = attr.Value
+								case "cccc":
+									cccc = attr.Value
+								case "awipsid":
+									awips = attr.Value
+								}
+							}
+
 							// Remove extra newlines
 							text := strings.ReplaceAll(elem.String(), "\n\n", "\n")
+
+							// Build the message
+							message := streaming.AWIPSRaw{
+								Issued: *issued,
+								TTAAII: ttaaii,
+								CCCC:   cccc,
+								AWIPS:  awips,
+								Text:   text,
+							}
+							data, err := json.Marshal(message)
+							if err != nil {
+								log.Error().Err(err).Msg("failed to marshal awips raw message")
+								continue
+							}
+
 							// Update last received time
-							now := time.Now()
 							atomic.StoreInt64(&lastReceived, now.Unix())
 							// Share the message
-							slog.Debug("received message", "receivedAt", now.String())
-							messages <- Message{
-								Text:       text,
-								ReceivedAt: time.Now(),
-							}
+							producer.messages <- Message{"application/json", data}
 							// Increment message rate
 							messageRate.Add(1)
 						}
@@ -153,41 +180,20 @@ func Go() {
 		case <-time.After(time.Minute):
 			last := atomic.LoadInt64(&lastReceived)
 			if last == 0 || time.Now().Unix()-last > 60 {
-				slog.Warn("no messages received in the last minute", "messagesLastMinute", messageRate.Load())
+				log.Warn().Uint64("messagesLastMinute", messageRate.Load()).Msg("no messages received in the last minute")
 			} else {
-				slog.Debug("healthy", "messagesLastMinute", messageRate.Load())
+				log.Debug().Uint64("messagesLastMinute", messageRate.Load()).Msg("healthy")
 			}
 			// Reset message rate
 			messageRate.Swap(0)
 		}
 	}()
 
-	// Kafka producer
-	go func() {
-		for message := range messages {
-
-			data, err := json.Marshal(message)
-			if err != nil {
-				slog.Error("failed to marshal message", "error", err.Error())
-			}
-
-			record := &kgo.Record{
-				Topic: "us-awips-raw",
-				Value: data,
-			}
-			kafkaClient.Produce(context.Background(), record, func(r *kgo.Record, err error) {
-				if err != nil {
-					slog.Error("failed to produce message to Kafka", "error", err.Error())
-				} else {
-					slog.Debug("message produced to Kafka", "topic", r.Topic)
-				}
-			})
-		}
-	}()
+	go producer.Run()
 
 	<-ctx.Done()
-	slog.Info("shutting down")
-	kafkaClient.Close()
+	log.Warn().Msg("shutting down")
+	producer.Stop()
 
 }
 
