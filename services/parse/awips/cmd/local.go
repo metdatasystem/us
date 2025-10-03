@@ -11,7 +11,7 @@ var localCmd = &cobra.Command{
 	Use:   "local",
 	Short: "Parsing from local files and directories",
 	Run: func(cmd *cobra.Command, args []string) {
-		internal.Local(path)
+		internal.Local(path, logLevel)
 	},
 }
 

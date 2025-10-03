@@ -11,7 +11,7 @@ import (
 var (
 	envFile     string
 	logLevelInt int
-	logLevel    zerolog.Level = 1
+	logLevel    zerolog.Level = zerolog.InfoLevel
 	// The root command of our program
 	rootCmd = &cobra.Command{
 		Use:   "mds-us-awips",
@@ -30,6 +30,9 @@ func init() {
 	// Bind our args to the command
 	rootCmd.PersistentFlags().StringVar(&envFile, "env", ".env", "The env file to read.")
 	rootCmd.PersistentFlags().IntVar(&logLevelInt, "log", 1, "The logging level to use.")
+
+	rootCmd.AddCommand(serverCmd)
+	rootCmd.AddCommand(localCmd)
 }
 
 func initConfig() {
