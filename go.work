@@ -5,8 +5,8 @@ use (
 	./pkg/db
 	./pkg/models
 	./pkg/streaming
-	./services/ingest/awips
-	./services/parse/awips
-	./services/live
 	./scripts/shapefiler
+	./services/ingest/awips
+	./services/live
+	./services/parse/awips
 )
