@@ -1,11 +1,11 @@
 #
-name: Build and publish services/ingest/awips
+name: Build and publish services
 
 # Configures this workflow to run every time a change is pushed to the branch called `release`.
 on:
-    # push:
-    #     branches: main
-    #     paths: "services/ingest/awips/**"
+    push:
+        tags:
+            - "v*"
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
@@ -24,6 +24,9 @@ jobs:
             attestations: write
             id-token: write
             #
+        strategy:
+            matrix:
+                module: [ingest/awips, parse/awips, live]
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -47,7 +50,7 @@ jobs:
               id: push
               uses: docker/build-push-action@v6.15.0
               with:
-                  context: services/ingest/awips
+                  context: ./services/${{matrix.module}}
                   push: true
                   tags: ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
