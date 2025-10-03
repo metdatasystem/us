@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"fmt"
 	"os"
 	"os/signal"
@@ -11,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/metdatasystem/us/pkg/streaming"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/xmppo/go-xmpp"
@@ -27,8 +29,6 @@ type XmppConfig struct {
 func NWWS(logLevel zerolog.Level) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
-
-	fmt.Println(logLevel)
 
 	zerolog.SetGlobalLevel(logLevel)
 
@@ -117,14 +117,52 @@ func NWWS(logLevel zerolog.Level) {
 					for _, elem := range v.OtherElem {
 						// NWWS-OI uses 'x' as the XML element containing the raw text
 						if elem.XMLName.Local == "x" {
+							now := time.Now()
+							log.Debug().Time("received", now).Msg("received message")
+							// Get attributes
+							var issued *time.Time = nil
+							var ttaaii string
+							var cccc string
+							var awips string
+							for _, attr := range elem.Attr {
+								switch attr.Name.Local {
+								case "issue":
+									t, err := time.Parse("2006-01-02T15:04:05Z", attr.Value)
+									if err != nil {
+										log.Error().Err(err).Msg("failed to parse x element issue time")
+										continue
+									}
+									issued = &t
+								case "ttaaii":
+									ttaaii = attr.Value
+								case "cccc":
+									cccc = attr.Value
+								case "awipsid":
+									awips = attr.Value
+								}
+							}
+
 							// Remove extra newlines
 							text := strings.ReplaceAll(elem.String(), "\n\n", "\n")
+
+							// Build the message
+							message := streaming.AWIPSRaw{
+								Issued: *issued,
+								TTAAII: ttaaii,
+								CCCC:   cccc,
+								AWIPS:  awips,
+								Text:   text,
+							}
+							data, err := json.Marshal(message)
+							if err != nil {
+								log.Error().Err(err).Msg("failed to marshal awips raw message")
+								continue
+							}
+
 							// Update last received time
-							now := time.Now()
 							atomic.StoreInt64(&lastReceived, now.Unix())
 							// Share the message
-							log.Debug().Time("received", now).Msg("received message")
-							producer.messages <- producer.NewMessage(text, now)
+							producer.messages <- Message{"application/json", data}
 							// Increment message rate
 							messageRate.Add(1)
 						}

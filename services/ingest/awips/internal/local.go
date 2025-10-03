@@ -65,8 +65,7 @@ func processFile(file *os.File, size int64) {
 		log.Error().Err(err).Msg("producer is nil")
 		return
 	}
-	message := producer.NewMessage(string(data), t)
-	err = producer.SendMessage(message)
+	err = producer.SendMessage(Message{"text/plain", data})
 	if err != nil {
 		log.Error().Err(err).Msg("failed to send message")
 	}

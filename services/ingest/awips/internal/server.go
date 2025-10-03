@@ -2,40 +2,46 @@ package internal
 
 import (
 	"context"
-	"fmt"
 	"os"
 	"time"
 
-	"github.com/metdatasystem/us/pkg/kafka"
+	"github.com/metdatasystem/us/pkg/streaming"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
-	"github.com/twmb/franz-go/pkg/kgo"
 )
 
+type Message struct {
+	contentType string
+	data        []byte
+}
+
 type Producer struct {
-	client   *kgo.Client
-	messages chan *kafka.EventEnvelope
+	channel  *amqp.Channel
+	messages chan Message
 	done     bool
 }
 
 func NewProducer() (*Producer, error) {
 
-	// Create Kafka client
-	client, err := kgo.NewClient(
-		kgo.SeedBrokers(os.Getenv("KAFKA_BROKER")),
-	)
+	conn, err := amqp.Dial(os.Getenv("RABBIT_URL"))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Kafka client: %v", err)
+		return nil, err
 	}
 
-	err = client.Ping(context.Background())
+	ch, err := conn.Channel()
 	if err != nil {
-		return nil, fmt.Errorf("failed to ping Kafka client: %v", err)
+		return nil, err
 	}
+
+	_, err = streaming.DeclareAWIPSQueue(ch)
 
 	producer := &Producer{
-		client:   client,
-		messages: make(chan *kafka.EventEnvelope),
+		channel:  ch,
+		messages: make(chan Message),
 		done:     false,
+	}
+	if err != nil {
+		return nil, err
 	}
 
 	return producer, nil
@@ -45,7 +51,7 @@ func (p *Producer) Run() {
 	for message := range p.messages {
 
 		if p.done {
-			p.client.Close()
+			p.channel.Close()
 			return
 		}
 
@@ -61,29 +67,19 @@ func (p *Producer) Stop() {
 	p.done = true
 }
 
-func (p *Producer) SendMessage(message *kafka.EventEnvelope) error {
-	data, err := message.Marshal()
-	if err != nil {
-		return fmt.Errorf("failed to marshal message: %v", err.Error())
-	}
+func (p *Producer) SendMessage(message Message) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
 
-	record := &kgo.Record{
-		Topic: "us-awips-raw",
-		Value: data,
-	}
-	result := p.client.ProduceSync(context.Background(), record)
-	if result.FirstErr() != nil {
-		return result.FirstErr()
-	}
-
-	return nil
-}
-
-func (p *Producer) NewMessage(text string, receivedAt time.Time) *kafka.EventEnvelope {
-	return &kafka.EventEnvelope{
-		EventType: kafka.EventNew,
-		Product:   "awips-raw",
-		Data:      text,
-		Timestamp: time.Now(),
-	}
+	return p.channel.PublishWithContext(ctx,
+		"",                   // exchange
+		streaming.QueueAWIPS, // routing key
+		false,                // mandatory
+		false,                // immediate
+		amqp.Publishing{
+			ContentType: message.contentType,
+			Timestamp:   time.Now(),
+			AppId:       "us.ingest.awips",
+			Body:        message.data,
+		})
 }

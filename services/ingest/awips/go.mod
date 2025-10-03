@@ -8,14 +8,20 @@ require (
 )
 
 require (
+	github.com/golang/snappy v1.0.0 // indirect
 	github.com/klauspost/compress v1.18.0 // indirect
+	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
+	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.11.2 // indirect
 	golang.org/x/net v0.43.0 // indirect
 )
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/rabbitmq/amqp091-go v1.10.0
+	github.com/rabbitmq/rabbitmq-stream-go-client v1.6.0
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/twmb/franz-go v1.19.5
 	github.com/xmppo/go-xmpp v0.2.17
