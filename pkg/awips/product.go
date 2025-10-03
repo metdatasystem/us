@@ -122,7 +122,7 @@ func GetIssuedTime(text string) (time.Time, error) {
 		}
 
 		if err != nil {
-			return issued, errors.New("could not parse issued date line")
+			return issued, errors.New("could not parse issued date line: " + err.Error())
 		}
 	}
 
