@@ -1,4 +1,4 @@
-INSERT INTO phenomena (id, name) VALUES
+INSERT INTO vtec.phenomena (id, name) VALUES
 ('AF', 'Ashfall (land)'),
 ('AS', 'Air Stagnation'),
 ('BH', 'Beach Hazard'),
@@ -61,14 +61,14 @@ INSERT INTO phenomena (id, name) VALUES
 ('ZR', 'Freezing Rain');
 
 
-INSERT INTO significance (id, name) VALUES
+INSERT INTO vtec.significance (id, name) VALUES
 ('A', 'Watch'),
 ('S', 'Statement'),
 ('W', 'Warning'),
 ('Y', 'Advisory');
 
 
-INSERT INTO action (id, name) VALUES
+INSERT INTO vtec.action (id, name) VALUES
 ('CAN', 'Event Cancelled'),
 ('CON', 'Event Continued'),
 ('COR', 'Correction'),
