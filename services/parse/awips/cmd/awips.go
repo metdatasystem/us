@@ -1,10 +1,9 @@
 package main
 
 import (
-	"log/slog"
-
 	"github.com/joho/godotenv"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	"github.com/spf13/cobra"
 )
 
@@ -28,7 +27,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 
 	// Bind our args to the command
-	rootCmd.PersistentFlags().StringVar(&envFile, "env", ".env", "The env file to read.")
+	rootCmd.PersistentFlags().StringVar(&envFile, "env", "", "The env file to read.")
 	rootCmd.PersistentFlags().IntVar(&logLevelInt, "log", 1, "The logging level to use.")
 
 	rootCmd.AddCommand(serverCmd)
@@ -38,9 +37,11 @@ func init() {
 func initConfig() {
 	setLogLevel()
 
-	err := godotenv.Load(envFile)
-	if err != nil {
-		slog.Info("failed to load env file", "error", err.Error())
+	if envFile != "" {
+		err := godotenv.Load(envFile)
+		if err != nil {
+			log.Info().Err(err).Msg("failed to load env file")
+		}
 	}
 }
 
