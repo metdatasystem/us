@@ -1,16 +1,16 @@
 #
-name: Build and publish ingest/nwws
+name: Build and publish services/ingest/awips
 
 # Configures this workflow to run every time a change is pushed to the branch called `release`.
 on:
     push:
         branches: main
-        paths: "services/ingest/nwws/**"
+        paths: "services/ingest/awips/**"
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
     REGISTRY: ghcr.io
-    IMAGE_NAME: ${{ github.repository }}/ingest/nwws
+    IMAGE_NAME: ${{ github.repository }}/ingest/awips
 
 # There is a single job in this workflow. It's configured to run on the latest available version of Ubuntu.
 jobs:
@@ -47,7 +47,7 @@ jobs:
               id: push
               uses: docker/build-push-action@v6.15.0
               with:
-                  context: services/ingest/nwws
+                  context: services/ingest/awips
                   push: true
                   tags: ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
