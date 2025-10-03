@@ -1,0 +1,41 @@
+name: Verify Go Modules
+
+on:
+    pull_request:
+        branches: [main] # adjust as needed
+
+jobs:
+    verify-go-modules:
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: actions/setup-go@v5
+              with:
+                  go-version: "1.24.x" # or your project’s version
+
+            # Step 1: tidy every module
+            - name: Tidy all go.mod files
+              run: |
+                  set -euo pipefail
+                  # find all go.mod files and tidy them
+                  for mod in $(find . -name go.mod); do
+                    (cd "$(dirname "$mod")" && go mod tidy)
+                  done
+
+            # Step 2: sync workspace
+            - name: Sync go.work file
+              run: go work sync
+
+            # Step 3: fail if changes are detected
+            - name: Check for uncommitted changes
+              run: |
+                  if ! git diff --exit-code; then
+                    echo "❌ go.mod/go.sum/go.work files are not tidy or synced."
+                    echo "Please run:"
+                    echo "    go mod tidy (in each module)"
+                    echo "    go work sync"
+                    echo "and commit the results."
+                    exit 1
+                  fi
