@@ -1,5 +1,7 @@
 FROM golang:1.24.7 AS build
 
+LABEL description="A service supporting the ingest of AWIPS products into the US MDS."
+
 # Set destination for COPY
 WORKDIR /
 
