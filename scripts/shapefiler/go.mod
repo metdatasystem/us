@@ -1,6 +1,8 @@
 module shapefiler
 
-go 1.23.0
+go 1.24.0
+
+toolchain go1.24.7
 
 require (
 	github.com/everystreet/go-geojson/v2 v2.0.2
@@ -15,6 +17,6 @@ require (
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
 	go.mongodb.org/mongo-driver v1.17.1 // indirect
-	golang.org/x/net v0.43.0 // indirect
-	golang.org/x/text v0.28.0 // indirect
+	golang.org/x/net v0.44.0 // indirect
+	golang.org/x/text v0.29.0 // indirect
 )
