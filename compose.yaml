@@ -21,11 +21,41 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  
+  # Rabbit
+  rabbit:
+    image: rabbitmq:4-management
+    container_name: rabbitmq
+    hostname: rabbit
+    restart: unless-stopped
+    ports:
+      - "5672:5672" # AMQP protocol port
+      - "5552:5552" # Stream protocol port
+      - "15672:15672" # Management UI port
+    volumes:
+      - ./rabbitmq.conf:/etc/rabbitmq/rabbitmq.conf:ro
+      - ./rabbitmq-definitions.json:/etc/rabbitmq/definitions.json:ro
+      - rabbit_data:/var/lib/rabbitmq
+      - rabbit_log:/var/log/rabbitmq
+      - rabbit_enabled_plugins:/etc/rabbitmq/
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - RABBITMQ_LOAD_DEFINITIONS=/etc/rabbitmq/definitions.json
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbitmq_stream advertised_host localhost
+    networks:
+      - mds-us
 
 # Volumes
 volumes:
   mds-database-us:
     name: mds-database-us
+  rabbit_data:
+    name: rabbit-data
+  rabbit_log:
+    name: rabbit-log
+  rabbit_enabled_plugins:
+    name: rabbit_enabled_plugins
 
 # Networks
 networks:

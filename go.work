@@ -4,8 +4,9 @@ use (
 	./pkg/awips
 	./pkg/db
 	./pkg/models
-	./pkg/kafka
+	./pkg/streaming
 	./services/ingest/awips
 	./services/parse/awips
+	./services/live
 	./scripts/shapefiler
 )
