@@ -46,6 +46,8 @@ func Server(logLevel zerolog.Level) {
 	)
 
 	go func() {
+		log.Info().Msg("consuming messages")
+
 		for message := range messages {
 
 			go func(message amqp.Delivery) {
