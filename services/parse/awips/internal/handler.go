@@ -9,7 +9,6 @@ import (
 	"github.com/metdatasystem/us/pkg/models"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	zlog "github.com/rs/zerolog/log"
 )
 
@@ -117,7 +116,7 @@ func (handler *Handler) process(receivedAt time.Time) {
 				pHandler := productHandler{*handler}
 				dbproduct, err := pHandler.Handle(*product, receivedAt)
 				if err != nil {
-					log.Error().Err(err).Msg("failed to handle product")
+					handler.log.Error().Err(err).Msg("failed to handle product")
 					continue
 				}
 				handler.dbProduct = dbproduct
@@ -125,7 +124,7 @@ func (handler *Handler) process(receivedAt time.Time) {
 			h := route.Handler(handler)
 			err := h.Handle()
 			if err != nil {
-				log.Error().Err(err).Msgf("failed to handle product with %s", route.Name)
+				handler.log.Error().Err(err).Msgf("failed to handle product with %s", route.Name)
 			}
 		}
 	}
