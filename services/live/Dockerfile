@@ -1,5 +1,7 @@
 FROM golang:1.24.7 AS build
 
+LABEL description="A service providing real-time information of various datasets in the US MDS."
+
 # Install GEOS
 RUN apt-get update && apt-get install -y libgeos-dev
 

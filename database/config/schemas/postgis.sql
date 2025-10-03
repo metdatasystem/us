@@ -1,3 +1,5 @@
+CREATE EXTENSION postgis;
+
 CREATE SCHEMA IF NOT EXISTS postgis;
 
 -- States --

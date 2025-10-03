@@ -6,7 +6,7 @@ CREATE TABLE IF NOT EXISTS public.logs (
 	source varchar(64),
     message text,
     PRIMARY KEY (id)
-)
+);
 
 -- Create a single range partition of a table
 CREATE OR REPLACE FUNCTION public.CREATE_YEARLY_RANGE_PARTITION (TABLE_NAME TEXT, YEAR INTEGER) RETURNS VOID AS $$
