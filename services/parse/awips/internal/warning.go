@@ -1,17 +1,27 @@
 package internal
 
 import (
+	"context"
+	"encoding/json"
 	"time"
 
 	"github.com/metdatasystem/us/pkg/awips"
 	"github.com/metdatasystem/us/pkg/db"
-	"github.com/metdatasystem/us/pkg/kafka"
 	"github.com/metdatasystem/us/pkg/models"
+	"github.com/metdatasystem/us/pkg/streaming"
+	"github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog/log"
 	"github.com/twpayne/go-geos"
 )
 
 func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC, ugcs []*models.UGCMinimal) error {
 	product := handler.product
+
+	yesterday := time.Now().Add(time.Hour * -24)
+
+	if event.Ends.Before(yesterday) {
+		// return nil
+	}
 
 	ugcList := []string{}
 	for _, u := range ugcs {
@@ -60,39 +70,6 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 	// Warning exists and can be updated
 	if warning != nil {
 
-		updatedUGC := append([]string{}, ugcList...)
-
-		for _, ugc := range warning.UGC {
-			switch vtec.Action {
-			case "CAN", "UPG", "EXP":
-				index := -1
-				for i, u := range updatedUGC {
-					if u == ugc {
-						index = i
-					}
-				}
-
-				if index > -1 {
-					ret := make([]string, 0)
-					ret = append(ret, updatedUGC[:index]...)
-					updatedUGC = append(ret, updatedUGC[index+1:]...)
-				}
-			default:
-				index := -1
-				for i, u := range warning.UGC {
-					if u == ugc {
-						index = i
-					}
-				}
-
-				if index == -1 {
-					updatedUGC = append(updatedUGC, ugc)
-				} else {
-
-				}
-			}
-		}
-
 		warning.Expires = segment.UGC.Expires
 		warning.Ends = event.Ends
 		warning.Text = segment.Text
@@ -106,7 +83,6 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 		warning.Speed = speed
 		warning.SpeedText = speedText
 		warning.TMLTime = tmlTime
-		warning.UGC = updatedUGC
 		warning.Tornado = segment.Tags["tornado"]
 		warning.Damage = segment.Tags["damage"]
 		warning.HailThreat = segment.Tags["hailThreat"]
@@ -119,6 +95,44 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 		warning.SpoutTag = segment.Tags["spout"]
 		warning.SnowSquall = segment.Tags["snowSquall"]
 		warning.SnowSquallTag = segment.Tags["snowSquallImpact"]
+
+		// Publish before we override all the UGC data
+		err = handler.publishWarning(warning, product.Issued)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to publish warning to kafka")
+		}
+
+		// Convert warning.UGC into a map for fast lookups
+		existing := make(map[string]bool)
+		for _, v := range warning.UGC {
+			existing[v] = true
+		}
+
+		// Handle based on Action
+		switch warning.Action {
+		case "CAN", "UPG", "EXP":
+			// Remove elements that exist in newWarning.UGC
+			filtered := []string{}
+			toRemove := make(map[string]bool)
+			for _, v := range ugcList {
+				toRemove[v] = true
+			}
+			for _, v := range warning.UGC {
+				if !toRemove[v] {
+					filtered = append(filtered, v)
+				}
+			}
+			warning.UGC = filtered
+
+		default:
+			// Add new elements that are not already in warning.UGC
+			for _, v := range ugcList {
+				if !existing[v] {
+					warning.UGC = append(warning.UGC, v)
+					existing[v] = true
+				}
+			}
+		}
 
 		if err := db.UpdateWarning(handler.db, warning); err != nil {
 			return err
@@ -163,6 +177,11 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 			SnowSquallTag: segment.Tags["snowSquallImpact"],
 		}
 
+		err = handler.publishWarning(warning, product.Issued)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to publish warning to kafka")
+		}
+
 		err = db.InsertWarning(handler.db, warning)
 		if err != nil {
 			return err
@@ -170,23 +189,40 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 
 	}
 
+	return nil
+}
+
+func (handler *vtecHandler) publishWarning(warning *models.Warning, issued time.Time) error {
 	var eventType string
 	switch warning.Action {
 	case "NEW", "EXA", "EXB":
-		eventType = kafka.EventNew
+		eventType = streaming.EventNew
 	case "CAN", "UPG":
-		eventType = kafka.EventDelete
+		eventType = streaming.EventDelete
 	default:
-		eventType = kafka.EventUpdate
+		eventType = streaming.EventUpdate
 	}
 
-	kafkaEvent := &kafka.EventEnvelope{
-		EventType: eventType,
-		Product:   "warning",
-		ID:        warning.GenerateID(),
-		Timestamp: product.Issued,
-		Data:      warning,
+	data, err := json.Marshal(warning)
+	if err != nil {
+		return err
 	}
 
-	return kafka.PublishEvent(handler.kafka, kafkaEvent, "us-warnings")
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	defer cancel()
+
+	return handler.rabbit.PublishWithContext(ctx,
+		streaming.ExchangeLiveName,
+		"warning",
+		false,
+		false,
+		amqp091.Publishing{
+			ContentType: "application/json",
+			MessageId:   warning.GenerateID(),
+			Timestamp:   time.Now(),
+			Type:        eventType,
+			AppId:       "us.parse.awips",
+			Body:        data,
+		},
+	)
 }

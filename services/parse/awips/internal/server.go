@@ -2,19 +2,20 @@ package internal
 
 import (
 	"context"
-	"encoding/json"
-	"fmt"
 	"os/signal"
 	"syscall"
 
-	"github.com/metdatasystem/us/pkg/kafka"
+	"github.com/metdatasystem/us/pkg/streaming"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/twmb/franz-go/pkg/kgo"
 )
 
-func Server() {
+func Server(logLevel zerolog.Level) {
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	zerolog.SetGlobalLevel(logLevel)
 
 	db, err := newDatabasePool()
 	if err != nil {
@@ -22,65 +23,54 @@ func Server() {
 		return
 	}
 
-	kafkaClient, err := newKafkaClient()
+	rabbitChannel, err := newRabbitChannel()
 	if err != nil {
-		log.Error().Err(err).Msg("failed to initialise kafka client")
+		log.Error().Err(err).Msg("failed to initialise rabbit channel")
 		return
 	}
 
-	messages := make(chan *kafka.EventEnvelope, 100)
+	err = initRabbit(rabbitChannel)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to initialise rabbit declarations")
+		return
+	}
 
-	go func() {
-		log.Info().Msg("consuming messages")
-
-		for {
-			select {
-			case <-ctx.Done():
-				kafkaClient.Close()
-				log.Info().Msg("consumer closed")
-				return
-			default:
-				log.Info().Msg("polling")
-				fetches := kafkaClient.PollFetches(context.Background())
-				if fetches.IsClientClosed() {
-					log.Warn().Msg("kafka client closed")
-					<-ctx.Done()
-					continue
-				}
-				fetches.EachError(func(t string, p int32, err error) {
-					log.Err(err).Str("topic", t).Int32("partition", p).Msg("error fetching")
-				})
-
-				var seen int
-				fetches.EachRecord(func(record *kgo.Record) {
-					message := &kafka.EventEnvelope{}
-					if err := json.Unmarshal(record.Value, message); err != nil {
-						log.Err(err).Msg("failed to unmarshal message")
-						return
-					}
-					messages <- message
-					seen++
-				})
-				if err := kafkaClient.CommitUncommittedOffsets(context.Background()); err != nil {
-					log.Err(err).Msg("failed to commit offsets")
-					continue
-				}
-				log.Info().Int("seen", seen).Msg("fetched records")
-			}
-		}
-	}()
+	messages, err := rabbitChannel.Consume(
+		streaming.QueueAWIPS,
+		"",
+		false,
+		false,
+		false,
+		false,
+		nil,
+	)
 
 	go func() {
 		for message := range messages {
-			text := fmt.Sprintf("%v", message.Data)
 
-			go func() {
-				Handle(text, message.Timestamp, db, kafkaClient)
-			}()
+			go func(message amqp.Delivery) {
+				switch message.ContentType {
+				case "text/plain":
+					HandleText(string(message.Body), message.Timestamp, db, rabbitChannel)
+				case "application/json":
+					data := &streaming.AWIPSRaw{}
+					if err := data.Unmarshal(message.Body); err != nil {
+						log.Error().Err(err).Msg("failed to unmarshal awips raw")
+						return
+					}
+					Handle(data.Text, message.Timestamp, data.TTAAII, data.CCCC, data.AWIPS, db, rabbitChannel)
+				}
+
+				message.Ack(false)
+			}(message)
 		}
 
 	}()
 
 	<-ctx.Done()
 	log.Warn().Msg("shutting down")
+	err = rabbitChannel.Close()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to close rabbit channel")
+	}
 }

@@ -7,9 +7,10 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/metdatasystem/us/pkg/awips"
 	"github.com/metdatasystem/us/pkg/models"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 	zlog "github.com/rs/zerolog/log"
-	"github.com/twmb/franz-go/pkg/kgo"
 )
 
 var (
@@ -36,7 +37,7 @@ var routes = []Route{
 
 type Handler struct {
 	db        *pgxpool.Pool
-	kafka     *kgo.Client
+	rabbit    *amqp.Channel
 	dbProduct *models.AWIPSProduct
 	product   *awips.Product
 	log       zerolog.Logger
@@ -46,12 +47,12 @@ type HandlerFunc interface {
 	Handle() error
 }
 
-func Handle(text string, receivedAt time.Time, db *pgxpool.Pool, kafka *kgo.Client) {
+func HandleText(text string, receivedAt time.Time, db *pgxpool.Pool, rabbit *amqp.Channel) {
 
 	log := zlog.With().Logger()
 
 	product, err := awips.New(text)
-	if err != nil {
+	if err != nil && err != awips.ErrCouldNotFindAWIPS {
 		log.Error().Err(err).Msg("failed to parse product")
 		return
 	}
@@ -64,12 +65,52 @@ func Handle(text string, receivedAt time.Time, db *pgxpool.Pool, kafka *kgo.Clie
 
 	handler := &Handler{
 		db:      db,
-		kafka:   kafka,
+		rabbit:  rabbit,
 		log:     log,
 		product: product,
 	}
 
-	// Process the product matching it to any routes
+	handler.process(receivedAt)
+}
+
+func Handle(text string, receivedAt time.Time, wmo string, office string, awipsID string, db *pgxpool.Pool, rabbit *amqp.Channel) {
+	log := zlog.With().Logger()
+
+	log = log.With().Str("awips", awipsID).Logger()
+	log = log.With().Str("wmo", wmo).Logger()
+
+	product, err := awips.New(text)
+	if err != nil {
+		if err != awips.ErrCouldNotFindAWIPS {
+			log.Error().Err(err).Msg("failed to parse product")
+			return
+		}
+		if awipsID != "" {
+			product.AWIPS, err = awips.ParseAWIPS(awipsID + "\n")
+			if err != nil {
+				log.Error().Err(err).Msg("failed to parse awips")
+				return
+			}
+		}
+	}
+	if product.WMO.Original != "" {
+		log = log.With().Str("wmo", product.WMO.Original).Logger()
+	}
+
+	handler := &Handler{
+		db:      db,
+		rabbit:  rabbit,
+		log:     log,
+		product: product,
+	}
+
+	handler.process(receivedAt)
+}
+
+// Process the product matching it to any routes
+func (handler *Handler) process(receivedAt time.Time) {
+	product := handler.product
+
 	for _, route := range routes {
 		if route.Match(product) {
 			if handler.dbProduct == nil {
@@ -88,8 +129,4 @@ func Handle(text string, receivedAt time.Time, db *pgxpool.Pool, kafka *kgo.Clie
 			}
 		}
 	}
-}
-
-func (handler *Handler) ProduceKafkaMessage() {
-
 }

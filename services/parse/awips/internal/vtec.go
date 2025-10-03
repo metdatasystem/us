@@ -59,7 +59,7 @@ func (handler *vtecHandler) Handle() error {
 
 			// Create the event if one does not exist
 			if event == nil {
-				log.Info().Msg("inserting new vtec event")
+				log.Debug().Msg("inserting new vtec event")
 
 				event = &models.VTECEvent{
 					Issued:       product.Issued,
