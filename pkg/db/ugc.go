@@ -52,6 +52,30 @@ func FindUGCByCodeMinimal(db *pgxpool.Pool, ugcCode string) (*models.UGCMinimal,
 	return ugc, nil
 }
 
+func GetAllValidUGCMinimal(db *pgxpool.Pool) ([]*models.UGCMinimal, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := db.Query(ctx, `
+	SELECT id, ugc, name, state, type, number, cwa, is_marine, is_fire, valid_from, valid_to FROM postgis.ugcs WHERE valid_to IS NULL
+	`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ugcs []*models.UGCMinimal
+	for rows.Next() {
+		ugc := &models.UGCMinimal{}
+		if err := ScanUGCMinimal(rows, ugc); err != nil {
+			return nil, err
+		}
+		ugcs = append(ugcs, ugc)
+	}
+
+	return ugcs, nil
+}
+
 // Get all UGCs for a given state
 func GetUGCForState(db *pgxpool.Pool, state string, ugcType string) ([]*models.UGC, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

@@ -52,6 +52,56 @@ func ScanWarning(row pgx.Row, warning *models.Warning) error {
 	)
 }
 
+func GetAllWarnings(db *pgxpool.Pool) ([]*models.Warning, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := db.Query(ctx, `
+	SELECT * FROM warnings.warnings
+	`)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+	warnings := []*models.Warning{}
+	for rows.Next() {
+		warning := &models.Warning{}
+		if err := ScanWarning(rows, warning); err != nil {
+			return nil, err
+		}
+
+		warnings = append(warnings, warning)
+	}
+
+	return warnings, nil
+}
+
+func GetAllActiveWarnings(db *pgxpool.Pool) ([]*models.Warning, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := db.Query(ctx, `
+	SELECT * FROM warnings.warnings WHERE action NOT IN ('CAN', 'EXP', 'UPG') AND ends > now() 
+	`)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+	warnings := []*models.Warning{}
+	for rows.Next() {
+		warning := &models.Warning{}
+		if err := ScanWarning(rows, warning); err != nil {
+			return nil, err
+		}
+
+		warnings = append(warnings, warning)
+	}
+
+	return warnings, nil
+}
+
 func FindWarning(db *pgxpool.Pool, wfo string, phenomena string, significance string, eventNumber int, year int) (*models.Warning, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
