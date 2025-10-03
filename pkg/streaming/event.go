@@ -1,4 +1,4 @@
-package kafka
+package streaming
 
 import (
 	"context"
@@ -29,11 +29,11 @@ func PublishEvent(client *kgo.Client, event *EventEnvelope, topic string) error 
 }
 
 type EventEnvelope struct {
-	EventType string    `json:"event_type"`
-	Product   string    `json:"product"`
-	ID        string    `json:"id"`
-	Timestamp time.Time `json:"timestamp"`
-	Data      any       `json:"data"`
+	EventType string          `json:"event_type"`
+	Product   string          `json:"product"`
+	ID        string          `json:"id"`
+	Timestamp time.Time       `json:"timestamp"`
+	Data      json.RawMessage `json:"data"`
 }
 
 func (envelope EventEnvelope) Marshal() ([]byte, error) {
