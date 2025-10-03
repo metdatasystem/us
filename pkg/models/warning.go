@@ -30,7 +30,7 @@ type Warning struct {
 	IsPDS         bool       `json:"is_pds"`
 	Geom          *geos.Geom `json:"geom,omitempty"`
 	Direction     *int       `json:"direction"`
-	Location      *geos.Geom `json:"location"`
+	Location      *geos.Geom `json:"location,omitempty"`
 	Speed         *int       `json:"speed"`
 	SpeedText     *string    `json:"speed_text"`
 	TMLTime       *time.Time `json:"tml_time"`
@@ -69,7 +69,7 @@ func (w *Warning) MarshalJSON() ([]byte, error) {
 	}
 
 	if w.Location != nil {
-		aux.Location = w.Geom.ToWKB()
+		aux.Location = w.Location.ToWKB()
 	}
 
 	return json.Marshal(aux)
