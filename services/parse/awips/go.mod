@@ -1,9 +1,13 @@
 module github.com/metdatasystem/us/services/parse/awips
 
-go 1.24.6
+go 1.24.7
 
 require (
 	github.com/joho/godotenv v1.5.1
+	github.com/metdatasystem/us/pkg/awips v0.0.0-20251003080119-7998023f2050
+	github.com/metdatasystem/us/pkg/db v0.0.0-20251003080119-7998023f2050
+	github.com/metdatasystem/us/pkg/models v0.0.0-20251003080119-7998023f2050
+	github.com/metdatasystem/us/pkg/streaming v0.0.0-20251003080119-7998023f2050
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rs/zerolog v1.34.0
 	github.com/spf13/cobra v1.10.1
@@ -19,8 +23,8 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/pierrec/lz4/v4 v4.1.22 // indirect
-	github.com/stretchr/testify v1.11.1 // indirect
 	github.com/twmb/franz-go/pkg/kmsg v1.11.2 // indirect
+	github.com/twpayne/go-geom v1.6.1 // indirect
 	golang.org/x/crypto v0.42.0 // indirect
 	golang.org/x/sync v0.17.0 // indirect
 	golang.org/x/sys v0.36.0 // indirect
