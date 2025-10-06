@@ -13,7 +13,7 @@ import (
 )
 
 var (
-	vtecRoute = regexp.MustCompile("(MWW|FWW|CFW|TCV|RFW|FFA|SVR|TOR|SVS|SMW|MWS|NPW|WCN|WSW|EWW|FLS|FLW)")
+	vtecRoute = regexp.MustCompile("(MWW|FFW|CFW|TCV|RFW|FFA|SVR|TOR|SVS|SMW|MWS|NPW|WCN|WSW|EWW|FLS|FLW)")
 	mcdRoute  = regexp.MustCompile("(SWOMCD)")
 )
 
