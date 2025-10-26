@@ -95,7 +95,7 @@ func AttachWarningManager(hub *Hub) {
 
 func NewWarningManager(hub *Hub) *WarningManager {
 
-	ticker := time.NewTicker(60 * time.Minute)
+	ticker := time.NewTicker(60 * time.Second)
 
 	store := &WarningManager{
 		hub:         hub,
