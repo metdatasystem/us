@@ -5,14 +5,15 @@ import (
 	"crypto/tls"
 	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"strings"
-	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/metdatasystem/us/pkg/streaming"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/xmppo/go-xmpp"
@@ -80,11 +81,8 @@ func NWWS(logLevel zerolog.Level) {
 		return
 	}
 
-	// Track time of last received message
-	var lastReceived int64
-	// Messages per minute
-	var messageRate atomic.Uint64
-	// Channel to share messages
+	// Monitoring
+	health := NewHealth()
 
 	producer, err := NewProducer()
 	if err != nil {
@@ -111,6 +109,7 @@ func NWWS(logLevel zerolog.Level) {
 					log.Error().Err(err).Msg("failed to receive messgae")
 					continue
 				}
+				health.NWWSReceived.Inc()
 
 				switch v := chat.(type) {
 				case xmpp.Chat:
@@ -159,12 +158,9 @@ func NWWS(logLevel zerolog.Level) {
 								continue
 							}
 
-							// Update last received time
-							atomic.StoreInt64(&lastReceived, now.Unix())
 							// Share the message
 							producer.messages <- Message{"application/json", data}
-							// Increment message rate
-							messageRate.Add(1)
+							health.NWWSProduced.Inc()
 						}
 					}
 				}
@@ -172,29 +168,16 @@ func NWWS(logLevel zerolog.Level) {
 		}
 	}()
 
-	// Health monitor
-	go func() {
-		select {
-		case <-ctx.Done():
-			return
-		case <-time.After(time.Minute):
-			last := atomic.LoadInt64(&lastReceived)
-			if last == 0 || time.Now().Unix()-last > 60 {
-				log.Warn().Uint64("messagesLastMinute", messageRate.Load()).Msg("no messages received in the last minute")
-			} else {
-				log.Debug().Uint64("messagesLastMinute", messageRate.Load()).Msg("healthy")
-			}
-			// Reset message rate
-			messageRate.Swap(0)
-		}
-	}()
-
 	go producer.Run()
+
+	http.Handle("/metrics", promhttp.Handler())
+	go http.ListenAndServe(":2112", nil)
+
+	log.Info().Msg("prometheus metrics up")
 
 	<-ctx.Done()
 	log.Warn().Msg("shutting down")
 	producer.Stop()
-
 }
 
 func (conf *XmppConfig) check() error {
