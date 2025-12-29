@@ -10,7 +10,7 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# # Copy init scripts
+# Copy init scripts
 COPY ./config/ /docker-entrypoint-initdb.d/
 
 USER postgres
