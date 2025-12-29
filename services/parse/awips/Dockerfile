@@ -1,4 +1,4 @@
-FROM golang:1.24.7 AS build
+FROM golang:1.25.4 AS build
 
 LABEL description="A service supporting the parsing of AWIPS products into the US MDS."
 

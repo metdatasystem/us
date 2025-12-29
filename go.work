@@ -1,12 +1,15 @@
-go 1.24.7
+go 1.25.4
 
 use (
 	./pkg/awips
 	./pkg/db
 	./pkg/models
+	./pkg/radar
 	./pkg/streaming
 	./scripts/shapefiler
 	./services/ingest/awips
+	./services/ingest/nexrad
 	./services/live
 	./services/parse/awips
+	./services/parse/nexrad
 )

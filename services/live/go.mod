@@ -1,6 +1,6 @@
 module github.com/metdatasystem/us/services/live
 
-go 1.24.7
+go 1.25.4
 
 require (
 	github.com/gorilla/websocket v1.5.3
