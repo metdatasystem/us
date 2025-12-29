@@ -12,6 +12,7 @@ require (
 
 require (
 	github.com/golang/geo v0.0.0-20230421003525-6adc56603217 // indirect
+	github.com/google/go-cmp v0.7.0 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect

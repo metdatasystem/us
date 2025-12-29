@@ -1,6 +1,6 @@
 module github.com/metdatasystem/us/pkg/streaming
 
-go 1.24.7
+go 1.25.4
 
 require (
 	github.com/rabbitmq/amqp091-go v1.10.0

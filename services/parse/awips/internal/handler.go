@@ -1,6 +1,7 @@
 package internal
 
 import (
+	"fmt"
 	"regexp"
 	"time"
 
@@ -72,7 +73,7 @@ func HandleText(text string, receivedAt time.Time, db *pgxpool.Pool, rabbit *amq
 	handler.process(receivedAt)
 }
 
-func Handle(text string, receivedAt time.Time, wmo string, office string, awipsID string, db *pgxpool.Pool, rabbit *amqp.Channel) {
+func Handle(text string, receivedAt time.Time, wmo string, office string, awipsID string, db *pgxpool.Pool, rabbit *amqp.Channel) error {
 	log := zlog.With().Logger()
 
 	log = log.With().Str("awips", awipsID).Logger()
@@ -82,13 +83,13 @@ func Handle(text string, receivedAt time.Time, wmo string, office string, awipsI
 	if err != nil {
 		if err != awips.ErrCouldNotFindAWIPS {
 			log.Error().Err(err).Msg("failed to parse product")
-			return
+			return fmt.Errorf("failed to parse product: %w", err)
 		}
 		if awipsID != "" {
 			product.AWIPS, err = awips.ParseAWIPS(awipsID + "\n")
 			if err != nil {
 				log.Error().Err(err).Msg("failed to parse awips")
-				return
+				return fmt.Errorf("failed to parse awips: %w", err)
 			}
 		}
 	}
@@ -104,6 +105,8 @@ func Handle(text string, receivedAt time.Time, wmo string, office string, awipsI
 	}
 
 	handler.process(receivedAt)
+
+	return nil
 }
 
 // Process the product matching it to any routes
