@@ -1,0 +1,120 @@
+services:
+  mds-database:
+    container_name: mds-database-us
+    restart: unless-stopped
+    image: ghcr.io/metdatasystem/us/database:latest
+    environment:
+      - POSTGRES_USER=${POSTGRES_USER}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - mds-database-us:/var/lib/postgresql/data
+    networks:
+      - mds-us
+    ports:
+      - 5432:5432
+    healthcheck:
+      test: [ "CMD", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  
+  # Rabbit
+  rabbit:
+    image: rabbitmq:4-management
+    container_name: rabbitmq
+    hostname: rabbit
+    restart: unless-stopped
+    ports:
+      - "5672:5672" # AMQP protocol port
+      - "5552:5552" # Stream protocol port
+      - "15672:15672" # Management UI port
+      - "15692:15692"
+    volumes:
+      - rabbit_data:/var/lib/rabbitmq
+      - rabbit_log:/var/log/rabbitmq
+      - rabbit_enabled_plugins:/etc/rabbitmq/
+    environment:
+      - RABBITMQ_DEFAULT_USER=${RABBITMQ_DEFAULT_USER}
+      - RABBITMQ_DEFAULT_PASS=${RABBITMQ_DEFAULT_PASS}
+      - RABBITMQ_SERVER_ADDITIONAL_ERL_ARGS=-rabbitmq_stream advertised_host localhost rabbitmq_prometheus
+    networks:
+      - mds-us
+
+  live:
+    image: ghcr.io/metdatasystem/us/live
+    container_name: us-live
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - RABBIT_URL=${RABBIT_URL}
+    networks:
+      - mds-us
+
+  ingest-awips:
+    image: ghcr.io/metdatasystem/us/ingest/awips
+    container_name: us-ingest-awips
+    environment:
+      - NWWSOI_SERVER=${NWWSOI_SERVER}
+      - NWWSOI_ROOM=${NWWSOI_ROOM}
+      - NWWSOI_USER=${NWWSOI_USER}
+      - NWWSOI_PASS=${NWWSOI_PASS}
+      - NWWSOI_RESOURCE=${NWWSOI_RESOURCE}
+      - RABBIT_URL=${RABBIT_URL}
+    networks:
+      - mds-us
+
+  parse-awips:
+    image: ghcr.io/metdatasystem/us/parse/awips
+    container_name: us-parse-awips
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - RABBIT_URL=${RABBIT_URL}
+    networks:
+      - mds-us
+
+  prometheus:
+    image: prom/prometheus
+    container_name: prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yaml'
+    ports:
+      - 9090:9090
+    restart: unless-stopped
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prom_data:/prometheus
+    networks:
+      - mds-us
+
+  grafana:
+    image: grafana/grafana
+    container_name: grafana
+    ports:
+      - 3000:3000
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASS}
+    volumes:
+      - ./grafana:/etc/grafana/provisioning/datasources
+    networks:
+      - mds-us
+
+# Volumes
+volumes:
+  mds-database-us:
+    name: mds-database-us
+  rabbit_data:
+    name: rabbit-data
+  rabbit_log:
+    name: rabbit-log
+  rabbit_enabled_plugins:
+    name: rabbit_enabled_plugins
+  prom_data:
+    name: prom-data
+
+# Networks
+networks:
+  mds-us:
+    name: mds-us
