@@ -19,5 +19,6 @@ echo "Database is ready. Bootstrapping..."
 
 docker stop -t 120 mds-us-database
 
-docker commit mds-us-database mds-us-database:latest
+docker commit mds-us-database mds-us-database
+docker tag mds-us-database ghcr.io/metdatasysem/mds-us-database:latest
 
