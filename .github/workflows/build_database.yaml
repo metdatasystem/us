@@ -1,0 +1,33 @@
+name: Build and Publish database
+
+on:
+    pull_request:
+        branches:
+            - main
+        paths:
+            - "database/**"
+    push:
+        branches:
+            - main
+        paths:
+            - "database/**"
+
+jobs:
+    build:
+        name: Build
+        runs-on: ubuntu-latest
+
+        steps:
+            - uses: actions/checkout@v6
+
+            - name: Run build script
+              run: cd ./database && ./build.sh
+
+            - name: Publish to GHCR
+              if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+              env:
+                  username: ${{ github.actor }}
+                  token: ${{ secrets.GITHUB_TOKEN }}
+              run: |
+                  echo $token | docker login ghcr.io -u $username --password-stdin
+                  docker push ghcr.io/metdatasysem/mds-us-database:latest
