@@ -90,9 +90,13 @@ func NWWS(logLevel zerolog.Level) {
 		return
 	}
 
+	timer := time.NewTimer(time.Minute)
+
 	// XMPP listening
 	go func() {
 		defer client.Close()
+
+		var pingId string
 
 		log.Info().Msgf("listening to %s", xmppConfig.Server)
 		for {
@@ -102,16 +106,37 @@ func NWWS(logLevel zerolog.Level) {
 				log.Warn().Msg("shutting down XMPP client")
 				close(producer.messages)
 				return
+			case <-timer.C:
+				t := time.Now().Format(time.RFC3339)
+				pingId = fmt.Sprintf("ping-%s-%s", xmppConfig.User, t)
+				_, err := client.SendOrg(fmt.Sprintf("<iq type='get' id='%s' from='%s@%s' to='%s@%s/%s'><ping xmlns='urn:xmpp:ping'></ping></iq>", pingId, xmppConfig.User, xmppConfig.Server, xmppConfig.Resource, xmppConfig.Room, xmppConfig.User))
+				if err != nil {
+					log.Error().Err(err).Msg("failed to send ping")
+					return
+				}
 			// Receive messages
 			default:
 				chat, err := client.Recv()
 				if err != nil {
-					log.Error().Err(err).Msg("failed to receive messgae")
+					log.Error().Err(err).Msg("failed to receive message")
 					continue
 				}
 				health.NWWSReceived.Inc()
 
 				switch v := chat.(type) {
+				case xmpp.IQ:
+					if pingId != "" && v.ID == pingId {
+						switch v.Type {
+						case "result":
+							log.Debug().Msg("received ping response")
+							health.NWWSPing.Set(1)
+						case "error":
+							log.Warn().Msg("received ping error")
+							health.NWWSPing.Set(0)
+						}
+						// Reset timer
+						timer.Reset(time.Minute)
+					}
 				case xmpp.Chat:
 					for _, elem := range v.OtherElem {
 						// NWWS-OI uses 'x' as the XML element containing the raw text

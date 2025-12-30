@@ -8,6 +8,7 @@ import (
 type Health struct {
 	NWWSReceived prometheus.Counter
 	NWWSProduced prometheus.Counter
+	NWWSPing     prometheus.Gauge
 }
 
 func NewHealth() *Health {
@@ -19,6 +20,10 @@ func NewHealth() *Health {
 		NWWSProduced: promauto.NewCounter(prometheus.CounterOpts{
 			Name: "nwws_produced",
 			Help: "Total number of NWWS messages produced",
+		}),
+		NWWSPing: promauto.NewGauge(prometheus.GaugeOpts{
+			Name: "nwws_ping",
+			Help: "Indicates the NWWS ping status",
 		}),
 	}
 }
