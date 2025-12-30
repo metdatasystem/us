@@ -24,13 +24,7 @@ jobs:
             #
         strategy:
             matrix:
-                module:
-                    [
-                        database,
-                        services/ingest/awips,
-                        services/parse/awips,
-                        services/live,
-                    ]
+                module: [ingest/awips, parse/awips, live]
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -60,7 +54,7 @@ jobs:
               id: push
               uses: docker/build-push-action@v6.15.0
               with:
-                  context: ./${{matrix.module}}
+                  context: ./services/${{matrix.module}}
                   platforms: linux/amd64
                   push: true
                   tags: ${{ steps.meta.outputs.tags }}
