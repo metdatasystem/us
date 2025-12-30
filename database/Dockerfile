@@ -6,6 +6,6 @@ ENV PGDATA=/opt/pgdata
 # Switch back to postgres user (required by official image)
 USER postgres
 
+# Trust
 RUN initdb -D /opt/pgdata --auth-host=trust --auth-local=trust
-
 RUN echo "host all all 172.0.0.0/8 trust" >> /opt/pgdata/pg_hba.conf
