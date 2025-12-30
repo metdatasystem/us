@@ -5,9 +5,6 @@ on:
     push:
         branches:
             - main
-    pull_request:
-        branches:
-            - main
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
@@ -66,5 +63,5 @@ jobs:
                   context: ./${{matrix.module}}
                   platforms: linux/amd64
                   push: true
-                  tags: latest
+                  tags: ${{ steps.meta.outputs.tags }}
                   labels: ${{ steps.meta.outputs.labels }}
