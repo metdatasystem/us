@@ -1,16 +1,11 @@
-FROM postgres:17.0 AS base
+FROM postgis/postgis:18-3.6
 
-# Install pg_cron
-RUN apt-get update && \
-    apt-get install curl ca-certificates gnupg lsb-release -y && \
-    curl https://www.postgresql.org/media/keys/ACCC4CF8.asc | apt-key add - && \
-    echo "deb http://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list \
-    apt-get update && \
-    apt-get install -y postgis postgresql-17-postgis-3 postgresql-17-cron && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+RUN mkdir /opt/pgdata && chown postgres:postgres /opt/pgdata && chmod 700 /opt/pgdata
+ENV PGDATA=/opt/pgdata
 
-# Copy init scripts
-COPY ./config/ /docker-entrypoint-initdb.d/
-
+# Switch back to postgres user (required by official image)
 USER postgres
+
+RUN initdb -D /opt/pgdata --auth-host=trust --auth-local=trust
+
+RUN echo "host all all 172.0.0.0/8 trust" >> /opt/pgdata/pg_hba.conf

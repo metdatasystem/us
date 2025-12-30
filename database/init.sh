@@ -10,7 +10,7 @@ FILES=("public" "postgis" "awips" "vtec" "warnings" "mcd")
 # Load tables
 for sql_file in ${FILES[@]}; do        
     echo "Running $sql_file.sql"
-    psql -U postgres -d mds -f "/docker-entrypoint-initdb.d/schemas/$sql_file.sql"
+    psql -U postgres -d mds -f "./schemas/$sql_file.sql"
 done
     
 psql -U postgres -c "ALTER DATABASE mds SET search_path = public, postgis, awips, vtec, warnings, mcd"
