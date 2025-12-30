@@ -21,9 +21,9 @@ GRANT ALL ON TABLE awips.products TO awips_service;
 GRANT SELECT ON TABLE awips.products TO nobody, api_service;
 
 -- Create all yearly table
-CREATE OR REPLACE FUNCTION awips.CREATE_YEARLY_PARTITIONS (start INTEGER, end INTEGER) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION awips.CREATE_YEARLY_PARTITIONS (starts INTEGER, ends INTEGER) RETURNS VOID AS $$
 BEGIN
-    FOR year IN start..end
+    FOR year IN starts..ends
     LOOP
 	    -- Products
         PERFORM create_yearly_range_partition('awips.products', year);
