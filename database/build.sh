@@ -21,4 +21,3 @@ docker stop -t 120 mds-us-database
 
 docker commit mds-us-database mds-us-database
 docker tag mds-us-database ghcr.io/metdatasystem/us/database:latest
-
