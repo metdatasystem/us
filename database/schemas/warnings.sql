@@ -1,4 +1,5 @@
 CREATE SCHEMA IF NOT EXISTS warnings;
+ALTER SCHEMA warnings OWNER TO mds;
 
 CREATE TABLE IF NOT EXISTS warnings.warnings (
     id serial,
@@ -46,3 +47,6 @@ CREATE INDEX IF NOT EXISTS warnings_starts ON warnings.warnings(starts);
 CREATE INDEX IF NOT EXISTS warnings_expires ON warnings.warnings(expires);
 CREATE INDEX IF NOT EXISTS warnings_ends ON warnings.warnings(ends);
 CREATE INDEX IF NOT EXISTS warnings_phenomena_significance ON warnings.warnings(phenomena, significance);
+ALTER TABLE warnings.warnings OWNER TO mds;
+GRANT ALL ON TABLE warnings.warnings TO awips_service;
+GRANT SELECT ON TABLE warnings.warnings TO nobody, api_service;
