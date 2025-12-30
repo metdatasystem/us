@@ -30,4 +30,4 @@ jobs:
                   token: ${{ secrets.GITHUB_TOKEN }}
               run: |
                   echo $token | docker login ghcr.io -u $username --password-stdin
-                  docker push ghcr.io/metdatasysem/mds-us-database:latest
+                  docker push ghcr.io/metdatasystem/mds-us-database:latest
