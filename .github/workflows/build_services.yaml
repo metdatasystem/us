@@ -1,7 +1,6 @@
 #
 name: Build and publish services
 
-# Configures this workflow to run every time a change is pushed to the branch called `release`.
 on:
     push:
         branches:
@@ -67,5 +66,5 @@ jobs:
                   context: ./${{matrix.module}}
                   platforms: linux/amd64
                   push: true
-                  # tags: ${{ steps.meta.outputs.tags }}
+                  tags: latest
                   labels: ${{ steps.meta.outputs.labels }}
