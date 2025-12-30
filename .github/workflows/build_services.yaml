@@ -4,8 +4,11 @@ name: Build and publish services
 # Configures this workflow to run every time a change is pushed to the branch called `release`.
 on:
     push:
-        tags:
-            - "v*"
+        branches:
+            - main
+    pull_request:
+        branches:
+            - main
 
 # Defines two custom environment variables for the workflow. These are used for the Container registry domain, and a name for the Docker image that this workflow builds.
 env:
@@ -35,8 +38,6 @@ jobs:
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
-            - name: Set up QEMU
-              uses: docker/setup-qemu-action@v3
 
             - name: Set up Docker Buildx
               uses: docker/setup-buildx-action@v3
