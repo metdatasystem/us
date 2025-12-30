@@ -1,4 +1,5 @@
 CREATE SCHEMA IF NOT EXISTS vtec;
+ALTER SCHEMA vtec OWNER TO mds;
 
 -- Phenomena types
 CREATE TABLE IF NOT EXISTS vtec.phenomena (
@@ -6,6 +7,9 @@ CREATE TABLE IF NOT EXISTS vtec.phenomena (
     name varchar(64) NOT NULL,
     description varchar(64)
 );
+ALTER TABLE vtec.phenomena OWNER TO mds;
+GRANT SELECT ON TABLE vtec.phenomena TO awips_service;
+GRANT SELECT ON TABLE vtec.phenomena TO nobody, api_service;
 
 -- Significance levels
 CREATE TABLE IF NOT EXISTS vtec.significance (
@@ -13,6 +17,9 @@ CREATE TABLE IF NOT EXISTS vtec.significance (
     name varchar(64) NOT NULL,
     description varchar(64)
 );
+ALTER TABLE vtec.significance OWNER TO mds;
+GRANT SELECT ON TABLE vtec.significance TO awips_service;
+GRANT SELECT ON TABLE vtec.significance TO nobody, api_service;
 
 -- Action types
 CREATE TABLE IF NOT EXISTS vtec.action (
@@ -20,6 +27,9 @@ CREATE TABLE IF NOT EXISTS vtec.action (
     name varchar(64) NOT NULL,
     description varchar(64)
 );
+ALTER TABLE vtec.action OWNER TO mds;
+GRANT SELECT ON TABLE vtec.action TO awips_service;
+GRANT SELECT ON TABLE vtec.action TO nobody, api_service;
 
 -- VTEC Event --
 CREATE TABLE IF NOT EXISTS vtec.events (
@@ -42,6 +52,9 @@ CREATE TABLE IF NOT EXISTS vtec.events (
     is_pds boolean DEFAULT false,
 	PRIMARY KEY (wfo, phenomena, significance, event_number, year)
 ) PARTITION BY LIST (year);
+ALTER TABLE vtec.events OWNER TO mds;
+GRANT ALL ON TABLE vtec.events TO awips_service;
+GRANT SELECT ON TABLE vtec.events TO nobody, api_service;
 
 -- VTEC UGC --
 CREATE TABLE IF NOT EXISTS vtec.ugcs (
@@ -64,6 +77,9 @@ CREATE TABLE IF NOT EXISTS vtec.ugcs (
         REFERENCES vtec.events(wfo, phenomena, significance, event_number, year) ON DELETE CASCADE,
     PRIMARY KEY (wfo, phenomena, significance, event_number, year, ugc)
 ) PARTITION BY LIST (year);
+ALTER TABLE vtec.ugcs OWNER TO mds;
+GRANT ALL ON TABLE vtec.ugcs TO awips_service;
+GRANT SELECT ON TABLE vtec.ugcs TO nobody, api_service;
 
 -- VTEC Event Updates --
 CREATE TABLE IF NOT EXISTS vtec.updates (
@@ -109,45 +125,80 @@ CREATE TABLE IF NOT EXISTS vtec.updates (
     FOREIGN KEY (wfo, phenomena, significance, event_number, year)
     REFERENCES vtec.events(wfo, phenomena, significance, event_number, year) ON DELETE CASCADE
 ) PARTITION BY LIST (year);
+ALTER TABLE vtec.updates OWNER TO mds;
+GRANT ALL ON TABLE vtec.updates TO awips_service;
+GRANT SELECT ON TABLE vtec.updates TO nobody, api_service;
 
-CREATE OR REPLACE FUNCTION vtec.CREATE_YEARLY_PARTITIONS (YEAR INTEGER) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION vtec.CREATE_YEARLY_PARTITIONS (starts INTEGER, ends INTEGER) RETURNS VOID AS $$
 BEGIN
-	-- VTEC Tables
-	PERFORM create_yearly_list_partition('vtec.events', year);
-    EXECUTE format('
-        	CREATE INDEX vtec_event_%s_issued ON vtec.events_%s(issued);',
-        	year, year);
-    EXECUTE format('
-        	CREATE INDEX vtec_event_%s_starts ON vtec.events_%s(starts);',
-        	year, year);
-    EXECUTE format('
-            CREATE INDEX vtec_event_%s_expires ON vtec.events_%s(expires);',
-            year, year);
-    EXECUTE format('
-        	CREATE INDEX vtec_event_%s_ends ON vtec.events_%s(ends);',
-        	year, year);
-    EXECUTE format('
-        	CREATE INDEX vtec_event_%s_phenomena_significance ON vtec.events_%s(phenomena, significance);',
-        	year, year);
-    EXECUTE format('
-        	CREATE INDEX vtec_event_%s_is_emergency ON vtec.events_%s(is_emergency) WHERE is_emergency = true;',
-        	year, year);
-    EXECUTE format('
-        	CREATE INDEX vtec_event_%s_is_pds ON vtec.events_%s(is_pds) WHERE is_pds = true;',
-        	year, year);
+    FOR year IN starts..ends
+    LOOP
+	    -- VTEC Tables
+	    PERFORM create_yearly_list_partition('vtec.events', year);
+        EXECUTE format('
+            	CREATE INDEX vtec_event_%s_issued ON vtec.events_%s(issued);',
+            	year, year);
+        EXECUTE format('
+            	CREATE INDEX vtec_event_%s_starts ON vtec.events_%s(starts);',
+            	year, year);
+        EXECUTE format('
+                CREATE INDEX vtec_event_%s_expires ON vtec.events_%s(expires);',
+                year, year);
+        EXECUTE format('
+            	CREATE INDEX vtec_event_%s_ends ON vtec.events_%s(ends);',
+            	year, year);
+        EXECUTE format('
+            	CREATE INDEX vtec_event_%s_phenomena_significance ON vtec.events_%s(phenomena, significance);',
+            	year, year);
+        EXECUTE format('
+            	CREATE INDEX vtec_event_%s_is_emergency ON vtec.events_%s(is_emergency) WHERE is_emergency = true;',
+            	year, year);
+        EXECUTE format('
+            	CREATE INDEX vtec_event_%s_is_pds ON vtec.events_%s(is_pds) WHERE is_pds = true;',
+            	year, year);
+        EXECUTE format('
+            	ALTER TABLE vtec.events_%s OWNER TO mds;',
+            	year);
+        EXECUTE format('
+            	GRANT ALL ON TABLE vtec.events_%s TO awips_service;',
+            	year);
+        EXECUTE format('
+            	GRANT SELECT ON TABLE vtec.events_%s TO nobody, api_service;',
+            	year);
 
-	PERFORM create_yearly_list_partition('vtec.ugcs', year);
-    EXECUTE format('
-        	CREATE INDEX vtec_ugc_%s_ugc ON vtec.ugcs_%s(ugc);',
-        	year, year);
-    EXECUTE format('
-        	CREATE INDEX vtec_ugc_%s_action ON vtec.ugcs_%s(action);',
-        	year, year);
+	    PERFORM create_yearly_list_partition('vtec.ugcs', year);
+        EXECUTE format('
+            	CREATE INDEX vtec_ugc_%s_ugc ON vtec.ugcs_%s(ugc);',
+            	year, year);
+        EXECUTE format('
+            	CREATE INDEX vtec_ugc_%s_action ON vtec.ugcs_%s(action);',
+            	year, year);
+        EXECUTE format('
+            	ALTER TABLE vtec.ugcs_%s OWNER TO mds;',
+            	year);
+        EXECUTE format('
+            	GRANT ALL ON TABLE vtec.ugcs_%s TO awips_service;',
+            	year);
+        EXECUTE format('
+            	GRANT SELECT ON TABLE vtec.ugcs_%s TO nobody, api_service;',
+            	year);
 
-	PERFORM create_yearly_list_partition('vtec.updates', year);
-    EXECUTE format('
-        	CREATE INDEX vtec_update_%s_geom ON vtec.updates_%s USING GIST (geom);',
-        	year, year);
-
+	    PERFORM create_yearly_list_partition('vtec.updates', year);
+        EXECUTE format('
+            	CREATE INDEX vtec_update_%s_geom ON vtec.updates_%s USING GIST (geom);',
+            	year, year);
+        EXECUTE format('ALTER TABLE vtec.updates_%s OWNER TO mds;',
+            	year);
+        EXECUTE format('GRANT ALL ON TABLE vtec.updates_%s TO awips_service;',
+            	year);
+        EXECUTE format('GRANT SELECT ON TABLE vtec.updates_%s TO nobody, api_service;',
+            	year);
+    END LOOP;
 END
 $$ LANGUAGE PLPGSQL;
+
+DO $$
+BEGIN
+    PERFORM vtec.CREATE_YEARLY_PARTITIONS(2020, 2030);
+END
+$$;

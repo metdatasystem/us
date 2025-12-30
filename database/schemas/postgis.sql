@@ -1,6 +1,7 @@
 CREATE EXTENSION postgis;
 
 CREATE SCHEMA IF NOT EXISTS postgis;
+ALTER SCHEMA postgis OWNER TO mds;
 
 -- States --
 CREATE TABLE IF NOT EXISTS postgis.states (
@@ -9,6 +10,9 @@ CREATE TABLE IF NOT EXISTS postgis.states (
     fips varchar(2) UNIQUE NOT NULL,
     is_offshore boolean NOT NULL
 );
+ALTER TABLE postgis.states OWNER TO mds;
+GRANT ALL ON TABLE postgis.states TO postgis;
+GRANT SELECT ON TABLE postgis.states TO nobody, api_service;
 
 -- Office --
 CREATE TABLE IF NOT EXISTS postgis.offices (
@@ -18,6 +22,9 @@ CREATE TABLE IF NOT EXISTS postgis.offices (
     state char(2) NOT NULL REFERENCES postgis.states(id),
     location geometry(Point, 4326)
 );
+ALTER TABLE postgis.offices OWNER TO mds;
+GRANT ALL ON TABLE postgis.offices TO postgis;
+GRANT SELECT ON TABLE postgis.offices TO nobody, api_service;
 
 -- County Warning Area --
 CREATE TABLE IF NOT EXISTS postgis.cwas (
@@ -29,6 +36,9 @@ CREATE TABLE IF NOT EXISTS postgis.cwas (
     region char(2) NOT NULL,
     valid_from timestamptz NOT NULL
 );
+ALTER TABLE postgis.cwas OWNER TO mds;
+GRANT ALL ON TABLE postgis.cwas TO postgis;
+GRANT SELECT ON TABLE postgis.cwas TO nobody, api_service;
 
 -- UGC (Universal Geographic Code) --
 CREATE TABLE IF NOT EXISTS postgis.ugcs (
@@ -48,3 +58,6 @@ CREATE TABLE IF NOT EXISTS postgis.ugcs (
 );
 CREATE INDEX IF NOT EXISTS ugc_ugc ON postgis.ugcs(ugc);
 CREATE INDEX IF NOT EXISTS ugc_geom ON postgis.ugcs USING GIST(geom);
+ALTER TABLE postgis.ugcs OWNER TO mds;
+GRANT ALL ON TABLE postgis.ugcs TO postgis;
+GRANT SELECT ON TABLE postgis.ugcs TO nobody, api_service;

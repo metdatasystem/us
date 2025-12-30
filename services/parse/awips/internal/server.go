@@ -142,7 +142,7 @@ func Server(logLevel zerolog.Level) {
 			select {
 			case <-secondTimer.C:
 				monitor.Ready.Set(1)
-
+				secondTimer.Reset(15 * time.Second)
 			case <-minuteTimer.C:
 				ctx, cancel := context.WithTimeout(context.Background(), time.Second*15)
 
@@ -161,6 +161,7 @@ func Server(logLevel zerolog.Level) {
 				}
 
 				cancel()
+				minuteTimer.Reset(time.Minute)
 			}
 		}
 	}()

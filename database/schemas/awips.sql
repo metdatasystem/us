@@ -1,4 +1,5 @@
 CREATE SCHEMA IF NOT EXISTS awips;
+ALTER SCHEMA awips OWNER TO mds;
 
 -- Product --
 CREATE TABLE IF NOT EXISTS awips.products (
@@ -15,14 +16,28 @@ CREATE TABLE IF NOT EXISTS awips.products (
 	PRIMARY KEY (id, issued),
     UNIQUE ( issued, wmo, awips, bbb, id)
 ) PARTITION BY RANGE (issued);
+ALTER TABLE awips.products OWNER TO mds;
+GRANT ALL ON TABLE awips.products TO awips_service;
+GRANT SELECT ON TABLE awips.products TO nobody, api_service;
 
 -- Create all yearly table
-CREATE OR REPLACE FUNCTION awips.CREATE_YEARLY_PARTITIONS (YEAR INTEGER) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION awips.CREATE_YEARLY_PARTITIONS (start INTEGER, end INTEGER) RETURNS VOID AS $$
 BEGIN
-	-- Products
-    PERFORM create_yearly_range_partition('awips.products', year);
-	EXECUTE format('
-        	CREATE INDEX product_%s_product_id ON awips.products_%s(product_id);',
-        	year, year);
+    FOR year IN start..end
+    LOOP
+	    -- Products
+        PERFORM create_yearly_range_partition('awips.products', year);
+	    EXECUTE format('
+            	CREATE INDEX product_%s_product_id ON awips.products_%s(product_id);',
+            	year, year);
+        EXECUTE format('GRANT ALL ON TABLE awips.products_%s TO mds;', year);
+        EXECUTE format('GRANT SELECT ON TABLE awips.products_%s TO nobody, api_service;', year);
+    END LOOP;
 END
 $$ LANGUAGE PLPGSQL;
+
+DO $$
+BEGIN
+    PERFORM awips.CREATE_YEARLY_PARTITIONS(2020, 2030);
+END
+$$;

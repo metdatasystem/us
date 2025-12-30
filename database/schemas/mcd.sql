@@ -1,4 +1,5 @@
 CREATE SCHEMA IF NOT EXISTS mcd;
+ALTER SCHEMA mcd OWNER TO mds;
 
 -- MCD --
 CREATE TABLE IF NOT EXISTS mcd.mcd (
@@ -17,13 +18,29 @@ CREATE TABLE IF NOT EXISTS mcd.mcd (
     most_prob_hail text,
 	PRIMARY KEY (id, year)
 ) PARTITION BY LIST (year);
+ALTER TABLE mcd.mcd OWNER TO mds;
+GRANT ALL ON TABLE mcd.mcd TO awips_service;
+GRANT SELECT ON TABLE mcd.mcd TO nobody, api_service;
 
-CREATE OR REPLACE FUNCTION mcd.CREATE_YEARLY_PARTITIONS (YEAR INTEGER) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION mcd.CREATE_YEARLY_PARTITIONS (starts INTEGER, ends INTEGER) RETURNS VOID AS $$
 BEGIN
-    -- MCD
-	PERFORM create_yearly_list_partition('mcd.mcd', year);
-    EXECUTE format('
-        	CREATE INDEX mcd_%s_geom ON mcd.mcd_%s USING GIST (geom);',
-        	year, year);
+    FOR year IN starts..ends
+    LOOP
+        -- MCD
+	    PERFORM create_yearly_list_partition('mcd.mcd', year);
+        EXECUTE format('
+            	CREATE INDEX mcd_%s_geom ON mcd.mcd_%s USING GIST (geom);',
+            	year, year);
+        EXECUTE format('ALTER TABLE mcd.mcd_%s OWNER TO mds;', year);
+        EXECUTE format('GRANT ALL ON TABLE mcd.mcd_%s TO awips_service;', year);
+        EXECUTE format('GRANT SELECT ON TABLE mcd.mcd_%s TO nobody, api_service;', year);
+    END LOOP;
 END
 $$ LANGUAGE PLPGSQL;
+
+-- Create the current decade partitions
+DO $$
+BEGIN
+    PERFORM mcd.CREATE_YEARLY_PARTITIONS(2020, 2030);
+END
+$$;
