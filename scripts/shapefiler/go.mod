@@ -7,7 +7,7 @@ toolchain go1.24.7
 require (
 	github.com/everystreet/go-geojson/v2 v2.0.2
 	github.com/everystreet/go-shapefile v1.0.0
-	github.com/twpayne/go-geos v0.20.1
+	github.com/twpayne/go-geos v0.20.2
 )
 
 require (
@@ -16,6 +16,6 @@ require (
 	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/stretchr/testify v1.11.1 // indirect
-	golang.org/x/net v0.44.0 // indirect
-	golang.org/x/text v0.29.0 // indirect
+	golang.org/x/net v0.47.0 // indirect
+	golang.org/x/text v0.32.0 // indirect
 )
