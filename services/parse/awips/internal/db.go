@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"os"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -10,10 +9,10 @@ import (
 	pgxgeos "github.com/twpayne/pgx-geos"
 )
 
-func newDatabasePool() (*pgxpool.Pool, error) {
+func newDatabasePool(url string) (*pgxpool.Pool, error) {
 	ctx := context.Background()
 
-	config, err := pgxpool.ParseConfig(os.Getenv("DATABASE_URL"))
+	config, err := pgxpool.ParseConfig(url)
 	if err != nil {
 		return nil, err
 	}
