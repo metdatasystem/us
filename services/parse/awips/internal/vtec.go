@@ -138,6 +138,10 @@ func (handler *vtecHandler) Handle() error {
 			case "CON", "EXP", "ROU", "CAN", "UPG", "EXT", "COR":
 				err = handler.ugcUpdate(&segment, event, vtec, ugcs)
 			}
+			if err != nil {
+				log.Error().Err(err).Msg("failed to create/update ugcs")
+				continue
+			}
 
 			handler.updateEvent(&segment, event, vtec)
 
@@ -307,7 +311,7 @@ func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *models.
 		end = *vtec.End
 	}
 
-	currentUGCs, err := db.FindCurrentVTECEventUGCsTX(handler.tx, event.WFO, event.Phenomena, event.Significance, event.EventNumber, event.Year, expires)
+	currentUGCs, err := db.FindCurrentVTECEventUGCsTX(handler.tx, handler.ctx, event.WFO, event.Phenomena, event.Significance, event.EventNumber, event.Year, expires)
 	if err != nil {
 		return err
 	}
