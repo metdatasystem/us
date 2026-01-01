@@ -1,0 +1,61 @@
+802 
+WFUS54 KOUN 200120
+TOROUN
+OKC019-067-085-200200-
+/O.NEW.KOUN.TO.W.0014.250420T0120Z-250420T0200Z/
+
+BULLETIN - EAS ACTIVATION REQUESTED
+Tornado Warning
+National Weather Service Norman OK
+820 PM CDT Sat Apr 19 2025
+
+The National Weather Service in Norman has issued a
+
+* Tornado Warning for...
+  Northeastern Jefferson County in southern Oklahoma...
+  Northwestern Love County in southern Oklahoma...
+  Southwestern Carter County in southern Oklahoma...
+
+* Until 900 PM CDT.
+
+* At 820 PM CDT, a severe thunderstorm capable of producing a tornado
+  was located 5 miles northwest of Rubottom, moving northeast at 20
+  mph.
+
+  HAZARD...Tornado and ping pong ball size hail.
+
+  SOURCE...Radar indicated rotation.
+
+  IMPACT...Flying debris will be dangerous to those caught without 
+           shelter. Mobile homes will be damaged or destroyed. 
+           Damage to roofs, windows, and vehicles will occur.  Tree 
+           damage is likely.
+
+* Locations impacted include...
+  Lone Grove, Healdton, Wilson, Ringling, Leon, Rubottom,
+  Burneyville, Cornish, Courtney, and Petersburg.
+
+PRECAUTIONARY/PREPAREDNESS ACTIONS...
+
+TAKE COVER NOW! Move to a storm shelter, safe room or an interior
+room on the lowest floor of a sturdy building. Avoid windows. If you
+are outdoors, in a mobile home, or in a vehicle, move to the closest
+substantial shelter and protect yourself from flying debris.
+
+Tornadoes are extremely difficult to see and confirm at night. Do not
+wait to see or hear the tornado. TAKE COVER NOW!
+
+&&
+
+LAT...LON 3382 9744 3383 9746 3390 9745 3392 9749
+      3390 9755 3391 9759 3392 9760 3395 9759
+      3397 9762 3429 9762 3427 9719 3385 9733
+      3388 9733 3382 9737
+TIME...MOT...LOC 0120Z 208DEG 18KT 3398 9753 
+
+TORNADO...RADAR INDICATED
+MAX HAIL SIZE...1.50 IN
+
+$$
+
+Mahale

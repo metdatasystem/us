@@ -1,0 +1,71 @@
+910 
+WWUS54 KOUN 200147
+SVSOUN
+
+Severe Weather Statement
+National Weather Service Norman OK
+847 PM CDT Sat Apr 19 2025
+
+OKC067-200156-
+/O.CAN.KOUN.TO.W.0014.000000T0000Z-250420T0200Z/
+Jefferson OK-
+847 PM CDT Sat Apr 19 2025
+
+...THE TORNADO WARNING FOR NORTHEASTERN JEFFERSON COUNTY IS
+CANCELLED...
+
+The tornadic thunderstorm which prompted the warning has moved out 
+of the warned area. Therefore, the warning has been cancelled.
+
+LAT...LON 3395 9756 3398 9756 3398 9754 3401 9756
+      3429 9756 3427 9719 3393 9731 3392 9745
+TIME...MOT...LOC 0146Z 212DEG 19KT 3404 9743 
+
+$$
+
+OKC019-085-200200-
+/O.CON.KOUN.TO.W.0014.000000T0000Z-250420T0200Z/
+Love OK-Carter OK-
+847 PM CDT Sat Apr 19 2025
+
+...A TORNADO WARNING REMAINS IN EFFECT UNTIL 900 PM CDT FOR
+NORTHWESTERN LOVE AND SOUTHWESTERN CARTER COUNTIES...
+
+At 846 PM CDT, a confirmed tornado was located 7 miles north of
+Rubottom, moving northeast at 20 mph.
+
+HAZARD...Damaging tornado and ping pong ball size hail.
+
+SOURCE...Weather spotters confirmed tornado.
+
+IMPACT...Flying debris will be dangerous to those caught without 
+         shelter. Mobile homes will be damaged or destroyed. Damage 
+         to roofs, windows, and vehicles will occur.  Tree damage is 
+         likely.
+
+Locations impacted include...
+Lone Grove, Healdton, Wilson, Rubottom, and Courtney.
+
+PRECAUTIONARY/PREPAREDNESS ACTIONS...
+
+To repeat, a tornado is on the ground. TAKE COVER NOW! Move to a
+storm shelter, safe room, or an interior room on the lowest floor of
+a sturdy building. Avoid windows. If you are outdoors, in a mobile
+home, or in a vehicle, move to the closest substantial shelter and
+protect yourself from flying debris.
+
+Tornadoes are extremely difficult to see and confirm at night. Do not
+wait to see or hear the tornado. TAKE COVER NOW!
+
+&&
+
+LAT...LON 3395 9756 3398 9756 3398 9754 3401 9756
+      3429 9756 3427 9719 3393 9731 3392 9745
+TIME...MOT...LOC 0146Z 212DEG 19KT 3404 9743 
+
+TORNADO...OBSERVED
+MAX HAIL SIZE...1.50 IN
+
+$$
+
+Mahale

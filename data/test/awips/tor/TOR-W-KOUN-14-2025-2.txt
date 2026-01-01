@@ -1,0 +1,57 @@
+922 
+WWUS54 KOUN 200140
+SVSOUN
+
+Severe Weather Statement
+National Weather Service Norman OK
+840 PM CDT Sat Apr 19 2025
+
+OKC019-067-085-200200-
+/O.CON.KOUN.TO.W.0014.000000T0000Z-250420T0200Z/
+Jefferson OK-Love OK-Carter OK-
+840 PM CDT Sat Apr 19 2025
+
+...A TORNADO WARNING REMAINS IN EFFECT UNTIL 900 PM CDT FOR
+NORTHEASTERN JEFFERSON...NORTHWESTERN LOVE AND SOUTHWESTERN CARTER
+COUNTIES...
+
+At 840 PM CDT, a severe thunderstorm capable of producing a tornado
+was located 4 miles north of Rubottom, moving northeast at 20 mph.
+
+HAZARD...Tornado and ping pong ball size hail.
+
+SOURCE...Radar indicated rotation.
+
+IMPACT...Flying debris will be dangerous to those caught without 
+         shelter. Mobile homes will be damaged or destroyed. Damage 
+         to roofs, windows, and vehicles will occur.  Tree damage is 
+         likely.
+
+Locations impacted include...
+Lone Grove, Healdton, Wilson, Ringling, Leon, Rubottom, Burneyville,
+Cornish, Courtney, and Petersburg.
+
+PRECAUTIONARY/PREPAREDNESS ACTIONS...
+
+TAKE COVER NOW! Move to a storm shelter, safe room, or an interior
+room on the lowest floor of a sturdy building. Avoid windows. If you
+are outdoors, in a mobile home, or in a vehicle, move to the closest
+substantial shelter and protect yourself from flying debris.
+
+Tornadoes are extremely difficult to see and confirm at night. Do not
+wait to see or hear the tornado. TAKE COVER NOW!
+
+&&
+
+LAT...LON 3386 9745 3390 9745 3392 9749 3390 9755
+      3391 9759 3392 9760 3395 9759 3397 9762
+      3429 9762 3427 9719 3386 9733 3388 9733
+      3386 9734
+TIME...MOT...LOC 0140Z 213DEG 17KT 3401 9748 
+
+TORNADO...RADAR INDICATED
+MAX HAIL SIZE...1.50 IN
+
+$$
+
+Mahale
