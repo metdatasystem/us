@@ -5,7 +5,7 @@ go 1.25.4
 require (
 	github.com/stretchr/testify v1.11.1
 	github.com/twpayne/go-geom v1.6.1
-	github.com/twpayne/go-geos v0.20.1
+	github.com/twpayne/go-geos v0.20.2
 )
 
 require (
