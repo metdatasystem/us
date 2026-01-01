@@ -32,10 +32,16 @@ github.com/mattn/go-isatty v0.0.20 h1:xfD0iDuEKnDkl03q4limB+vH+GxLEtL/jb4xVJSWWE
 github.com/mattn/go-isatty v0.0.20/go.mod h1:W+V8PltTTMOvKvAeJH7IuucS94S2C6jfK/D7dTCTo3Y=
 github.com/metdatasystem/us/pkg/db v0.0.0-20251003080119-7998023f2050 h1:kfBdcpHtvq83ZLOvFE02a7/I5BCjb2WZpNCbAjWwUEI=
 github.com/metdatasystem/us/pkg/db v0.0.0-20251003080119-7998023f2050/go.mod h1:FLStACoAVw78En91ReAPV+oj/b7zpwFAcD94/J4hq8k=
+github.com/metdatasystem/us/pkg/db v0.0.0-20260101153751-f77d3003a8b7 h1:YqiHcC5B0R4ACtId4FuYdZOsFIDww4az0oCWXm49vEA=
+github.com/metdatasystem/us/pkg/db v0.0.0-20260101153751-f77d3003a8b7/go.mod h1:4SRXE2SXrsaEkptDsrb0UbH4Z1NrPWF+oz3icH9ZoOY=
 github.com/metdatasystem/us/pkg/models v0.0.0-20251003080119-7998023f2050 h1:SzJ4SDAQlpXOCn+LofBlPdo6RfbsZykISV8L39bihF4=
 github.com/metdatasystem/us/pkg/models v0.0.0-20251003080119-7998023f2050/go.mod h1:0NdiMZ0CH/gtWW79ZyTvj7BeNYbVpwUFyKoAMc36E0U=
+github.com/metdatasystem/us/pkg/models v0.0.0-20260101153751-f77d3003a8b7 h1:Y5C4RSqrNUCeVFI+ghYSH7EC/nFMv+PVGO1ZgdZlyw0=
+github.com/metdatasystem/us/pkg/models v0.0.0-20260101153751-f77d3003a8b7/go.mod h1:zQqmXvJYCs3schzMfijH2bEslRSHJnp4H6SmLnr4bz0=
 github.com/metdatasystem/us/pkg/streaming v0.0.0-20251003080119-7998023f2050 h1:kHozkaYJe9KRAgB2XsFOvdldrddkFatoPAh0wFoCjt8=
 github.com/metdatasystem/us/pkg/streaming v0.0.0-20251003080119-7998023f2050/go.mod h1:+1XuNn9QHYucw5MzdDMkVhZUPqEbiMEtIxkWTtQX/Rs=
+github.com/metdatasystem/us/pkg/streaming v0.0.0-20260101153751-f77d3003a8b7 h1:i+v7OkpAOj+kli63+e/7jN5NK8mQBYJmi8HTNH+1jVo=
+github.com/metdatasystem/us/pkg/streaming v0.0.0-20260101153751-f77d3003a8b7/go.mod h1:UhQHqH4qAi7uRedoBSBg7Ypsr1YsIF5RSpLAue88Tx8=
 github.com/pierrec/lz4/v4 v4.1.23 h1:oJE7T90aYBGtFNrI8+KbETnPymobAhzRrR8Mu8n1yfU=
 github.com/pierrec/lz4/v4 v4.1.23/go.mod h1:EoQMVJgeeEOMsCqCzqFm2O0cJvljX2nGZjcRIPL34O4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=

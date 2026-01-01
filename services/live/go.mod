@@ -6,9 +6,9 @@ require (
 	github.com/gorilla/websocket v1.5.3
 	github.com/jackc/pgx/v5 v5.8.0
 	github.com/joho/godotenv v1.5.1
-	github.com/metdatasystem/us/pkg/db v0.0.0-20251003080119-7998023f2050
-	github.com/metdatasystem/us/pkg/models v0.0.0-20251003080119-7998023f2050
-	github.com/metdatasystem/us/pkg/streaming v0.0.0-20251003080119-7998023f2050
+	github.com/metdatasystem/us/pkg/db v0.0.0-20260101153751-f77d3003a8b7
+	github.com/metdatasystem/us/pkg/models v0.0.0-20260101153751-f77d3003a8b7
+	github.com/metdatasystem/us/pkg/streaming v0.0.0-20260101153751-f77d3003a8b7
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/rs/zerolog v1.34.0
 	github.com/twpayne/go-geos v0.20.2
