@@ -12,24 +12,26 @@ import (
 func ScanWarning(row pgx.Row, warning *models.Warning) error {
 	return row.Scan(
 		&warning.ID,
+		&warning.Phenomena,
+		&warning.Significance,
+		&warning.WFO,
+		&warning.EventNumber,
+		&warning.Year,
+		&warning.Action,
+		&warning.Current,
 		&warning.CreatedAt,
 		&warning.UpdatedAt,
 		&warning.Issued,
 		&warning.Starts,
 		&warning.Expires,
+		&warning.ExpiresInitial,
 		&warning.Ends,
-		&warning.EndInitial,
-		&warning.Text,
-		&warning.WFO,
-		&warning.Action,
 		&warning.Class,
-		&warning.Phenomena,
-		&warning.Significance,
-		&warning.EventNumber,
-		&warning.Year,
 		&warning.Title,
 		&warning.IsEmergency,
 		&warning.IsPDS,
+		&warning.Text,
+		&warning.Product,
 		&warning.Geom,
 		&warning.Direction,
 		&warning.Location,
@@ -126,28 +128,53 @@ func FindWarning(db *pgxpool.Pool, wfo string, phenomena string, significance st
 	return warning, nil
 }
 
+func FindWarningTx(tx pgx.Tx, wfo string, phenomena string, significance string, eventNumber int, year int) (*models.Warning, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := tx.Query(ctx, `
+	SELECT * FROM warnings.warnings WHERE wfo = $1 AND phenomena = $2 AND significance = $3 AND event_number = $4 AND year = $5
+	`, wfo, phenomena, significance, eventNumber, year)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	var warning *models.Warning
+	if rows.Next() {
+		warning = &models.Warning{}
+		if err := ScanWarning(rows, warning); err != nil {
+			return nil, err
+		}
+	}
+
+	return warning, nil
+}
+
 func InsertWarning(db *pgxpool.Pool, warning *models.Warning) error {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
 	rows, err := db.Query(ctx, `
        INSERT INTO warnings.warnings(
-	       issued, starts, expires, ends, end_initial, text, 
+	       issued, starts, expires, ends, expires_initial, text, product, 
 		   wfo, action, class, phenomena, significance, event_number, year, 
 		   title, is_emergency, is_pds, geom, direction, location, speed, speed_text, tml_time, 
 		   ugc, tornado, damage, hail_threat, hail_tag, wind_threat, wind_tag, flash_flood, 
 		   rainfall_tag, flood_tag_dam, spout_tag, snow_squall, snow_squall_tag
        ) VALUES (
 	       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
-		   $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35
+		   $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36
        )
        `,
 		warning.Issued,
 		warning.Starts,
 		warning.Expires,
 		warning.Ends,
-		warning.EndInitial,
+		warning.ExpiresInitial,
 		warning.Text,
+		warning.Product,
 		warning.WFO,
 		warning.Action,
 		warning.Class,
