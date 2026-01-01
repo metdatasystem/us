@@ -2,7 +2,6 @@ package internal
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/metdatasystem/us/pkg/awips"
@@ -19,16 +18,13 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 	yesterday := time.Now().Add(time.Hour * -24)
 
 	if event.Ends.Before(yesterday) {
-		// return nil
+		return nil
 	}
 
 	ugcList := []string{}
 	for _, u := range ugcs {
 		ugcList = append(ugcList, u.UGC)
 	}
-
-	fmt.Println(vtec.Action)
-	fmt.Println(ugcList)
 
 	var geom *geos.Geom
 	if segment.LatLon != nil {
@@ -53,8 +49,6 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 		rows.Close()
 
 	}
-
-	fmt.Println(geom)
 
 	var direction *int
 	var locations *geos.Geom
