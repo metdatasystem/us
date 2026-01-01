@@ -2,10 +2,10 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/metdatasystem/us/pkg/awips"
-	"github.com/metdatasystem/us/pkg/db"
 	"github.com/metdatasystem/us/pkg/models"
 	"github.com/metdatasystem/us/pkg/streaming"
 	"github.com/rabbitmq/amqp091-go"
@@ -27,18 +27,34 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 		ugcList = append(ugcList, u.UGC)
 	}
 
+	fmt.Println(vtec.Action)
+	fmt.Println(ugcList)
+
 	var geom *geos.Geom
 	if segment.LatLon != nil {
 		coords := segment.LatLon.ToFloatClosing()
 		geom = geos.NewPolygon([][][]float64{coords})
 	} else if vtec.Action != "CAN" && vtec.Action != "UPG" && vtec.Action != "EXP" {
-		g, err := db.GetUGCUnionGeomSimplifiedTx(handler.tx, ugcList)
+		rows, err := handler.tx.Query(handler.ctx, `
+			SELECT ST_SimplifyPreserveTopology(ST_Union(geom), 0.0025) FROM postgis.ugcs WHERE valid_to IS NULL AND ugc = ANY($1)
+			`, ugcList)
 		if err != nil {
 			return err
 		}
 
-		geom = g
+		if rows.Next() {
+			g := &geos.Geom{}
+			if err := rows.Scan(&g); err != nil {
+				return err
+			}
+			geom = g
+		}
+
+		rows.Close()
+
 	}
+
+	fmt.Println(geom)
 
 	var direction *int
 	var locations *geos.Geom
