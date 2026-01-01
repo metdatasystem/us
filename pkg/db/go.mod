@@ -4,6 +4,7 @@ go 1.25.4
 
 require (
 	github.com/jackc/pgx/v5 v5.8.0
+	github.com/metdatasystem/us/pkg/models v0.0.0-20260101153751-f77d3003a8b7
 	github.com/twpayne/go-geos v0.20.2
 )
 
