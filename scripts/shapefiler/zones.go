@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/everystreet/go-shapefile"
-	orbjson "github.com/paulmach/orb/geojson"
+	"github.com/twpayne/go-geos"
 )
 
 func ParseZones(scanner *shapefile.ZipScanner, t time.Time) error {
@@ -25,7 +25,7 @@ func ParseZones(scanner *shapefile.ZipScanner, t time.Time) error {
 		return err
 	}
 
-	ugcRecords := make([]UGC, info.NumRecords)
+	ugcRecords := make(map[string]UGC, info.NumRecords)
 	count := 0
 
 	for {
@@ -49,7 +49,7 @@ func ParseZones(scanner *shapefile.ZipScanner, t time.Time) error {
 		stateAttr, _ := record.Attributes.Field("STATE")
 		state := fmt.Sprintf("%v", stateAttr.Value())
 
-		zonename, _ := record.Attributes.Field("SHORTNAME")
+		zonename, _ := record.Attributes.Field("NAME")
 		name := fmt.Sprintf("%v", zonename.Value())
 
 		lonAttr, _ := record.Attributes.Field("LON")
@@ -64,7 +64,7 @@ func ParseZones(scanner *shapefile.ZipScanner, t time.Time) error {
 			return err
 		}
 
-		centre := [2]float64{lon, lat}
+		centre := geos.NewPoint([]float64{lon, lat})
 
 		cwaAttr, _ := record.Attributes.Field("CWA")
 		cwa := fmt.Sprintf("%v", cwaAttr.Value())
@@ -82,7 +82,7 @@ func ParseZones(scanner *shapefile.ZipScanner, t time.Time) error {
 			Type:      "Z",
 			Area:      0.0,
 			Centre:    centre,
-			Geometry:  *mpolygon,
+			Geometry:  mpolygon,
 			CWA:       cwaArr,
 			IsMarine:  false,
 			IsFire:    false,
@@ -90,7 +90,7 @@ func ParseZones(scanner *shapefile.ZipScanner, t time.Time) error {
 			ValidTo:   nil,
 		}
 
-		ugcRecords[count] = ugc
+		ugcRecords[ugc.ID] = ugc
 
 		count++
 
@@ -102,43 +102,17 @@ func ParseZones(scanner *shapefile.ZipScanner, t time.Time) error {
 		return err
 	}
 
-	out, err := ToSQL(ugcRecords)
+	records, err := ToCSV(ugcRecords)
 	if err != nil {
 		return err
 	}
 
-	err = WriteToFile("zones.sql", []byte(out))
+	err = WriteToCSV("zones", records)
 	if err != nil {
 		return err
 	}
 
-	slog.Info(fmt.Sprintf("Wrote %d records to zones.sql\n", len(ugcRecords)))
-
-	collection := orbjson.NewFeatureCollection()
-
-	for _, ugc := range ugcRecords {
-		feature := orbjson.NewFeature(ugc.Geometry)
-		feature.Properties = map[string]interface{}{
-			"id":        ugc.ID,
-			"name":      ugc.Name,
-			"state":     ugc.State,
-			"type":      ugc.Type,
-			"number":    ugc.Number,
-			"is_marine": ugc.IsMarine,
-			"is_fire":   ugc.IsFire,
-			"cwa":       ugc.CWA,
-		}
-		collection.Append(feature)
-	}
-
-	data, err := collection.MarshalJSON()
-	if err != nil {
-		return err
-	}
-
-	WriteToFile("zones.geojson", data)
-
-	slog.Info(fmt.Sprintf("Wrote %d records to zones.geojson\n", len(ugcRecords)))
+	slog.Info(fmt.Sprintf("Wrote %d records to zones.csv\n", len(ugcRecords)))
 
 	return nil
 }

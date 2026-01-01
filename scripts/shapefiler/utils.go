@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/csv"
 	"errors"
 	"fmt"
 	"math"
@@ -10,8 +11,7 @@ import (
 
 	"github.com/everystreet/go-geojson/v2"
 	"github.com/everystreet/go-shapefile"
-	"github.com/paulmach/orb"
-	orbjson "github.com/paulmach/orb/geojson"
+	"github.com/twpayne/go-geos"
 )
 
 func DateToString(date *time.Time) string {
@@ -30,6 +30,44 @@ func getFloat(unk interface{}) (float64, error) {
 	}
 	fv := v.Convert(floatType)
 	return fv.Float(), nil
+}
+
+func getorCreateFile(filename string) (*os.File, error) {
+	_, err := os.Stat(filename)
+	if err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return nil, err
+		}
+	} else {
+		err := os.Remove(filename)
+
+		if err != nil {
+			return nil, err
+		}
+
+	}
+
+	return os.Create(filename)
+}
+
+func WriteToCSV(name string, records [][]string) error {
+	file, err := getorCreateFile(fmt.Sprintf("%s.csv", name))
+	if err != nil {
+		return err
+	}
+	defer file.Close()
+
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	for _, record := range records {
+		err := writer.Write(record)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func WriteToFile(filename string, contents []byte) error {
@@ -71,7 +109,7 @@ func CreateZipScanner(filename string) (*shapefile.ZipScanner, error) {
 	return scanner, nil
 }
 
-func GetShape(shape *geojson.Feature) (*orb.Geometry, error) {
+func GetShape(shape *geojson.Feature) (*geos.Geom, error) {
 	var mpolygon *geojson.Feature
 	switch f := shape.Geometry.(type) {
 	case *geojson.Polygon:
@@ -87,7 +125,7 @@ func GetShape(shape *geojson.Feature) (*orb.Geometry, error) {
 		panic(err)
 	}
 
-	geom, err := orbjson.UnmarshalFeature(geometry)
+	geom, err := geos.NewGeomFromGeoJSON(string(geometry))
 	if err != nil {
 		panic(err)
 	}
@@ -97,5 +135,5 @@ func GetShape(shape *geojson.Feature) (*orb.Geometry, error) {
 	// 	return nil, fmt.Errorf("could not assert type of orb.Geometry to orb.MultiPolygon")
 	// }
 
-	return &geom.Geometry, nil
+	return geom, nil
 }

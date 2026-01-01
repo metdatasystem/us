@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/everystreet/go-shapefile"
-	orbjson "github.com/paulmach/orb/geojson"
+	"github.com/twpayne/go-geos"
 )
 
 func ParseCounties(scanner *shapefile.ZipScanner, t time.Time) error {
@@ -25,7 +25,7 @@ func ParseCounties(scanner *shapefile.ZipScanner, t time.Time) error {
 		return err
 	}
 
-	ugcRecords := make([]UGC, info.NumRecords)
+	ugcRecords := make(map[string]UGC, info.NumRecords)
 	count := 0
 
 	// Call Record() to get each record in turn, until either the end of the file, or an error occurs
@@ -68,7 +68,7 @@ func ParseCounties(scanner *shapefile.ZipScanner, t time.Time) error {
 			return err
 		}
 
-		centre := [2]float64{lon, lat}
+		centre := geos.NewPoint([]float64{lon, lat})
 
 		cwaAttr, _ := record.Attributes.Field("CWA")
 		cwa := fmt.Sprintf("%v", cwaAttr.Value())
@@ -86,7 +86,7 @@ func ParseCounties(scanner *shapefile.ZipScanner, t time.Time) error {
 			Type:      "C",
 			Area:      0.0,
 			Centre:    centre,
-			Geometry:  *mpolygon,
+			Geometry:  mpolygon,
 			CWA:       cwaarr,
 			IsMarine:  false,
 			IsFire:    false,
@@ -94,7 +94,7 @@ func ParseCounties(scanner *shapefile.ZipScanner, t time.Time) error {
 			ValidTo:   nil,
 		}
 
-		ugcRecords[count] = ugc
+		ugcRecords[ugc.ID] = ugc
 
 		count++
 	}
@@ -105,43 +105,14 @@ func ParseCounties(scanner *shapefile.ZipScanner, t time.Time) error {
 		return err
 	}
 
-	out, err := ToSQL(ugcRecords)
+	records, err := ToCSV(ugcRecords)
 	if err != nil {
 		return err
 	}
 
-	err = WriteToFile("counties.sql", []byte(out))
-	if err != nil {
-		return err
-	}
+	err = WriteToCSV("counties", records)
 
-	slog.Info(fmt.Sprintf("Wrote %d records to counties.sql\n", len(ugcRecords)))
-
-	collection := orbjson.NewFeatureCollection()
-
-	for _, ugc := range ugcRecords {
-		feature := orbjson.NewFeature(ugc.Geometry)
-		feature.Properties = map[string]interface{}{
-			"id":        ugc.ID,
-			"name":      ugc.Name,
-			"state":     ugc.State,
-			"type":      ugc.Type,
-			"number":    ugc.Number,
-			"is_marine": ugc.IsMarine,
-			"is_fire":   ugc.IsFire,
-			"cwa":       ugc.CWA,
-		}
-		collection.Append(feature)
-	}
-
-	data, err := collection.MarshalJSON()
-	if err != nil {
-		return err
-	}
-
-	WriteToFile("counties.geojson", data)
-
-	slog.Info(fmt.Sprintf("Wrote %d records to counties.geojson\n", len(ugcRecords)))
+	slog.Info(fmt.Sprintf("Wrote %d records to counties.csv\n", len(ugcRecords)))
 
 	return err
 }
