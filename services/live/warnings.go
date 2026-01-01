@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"sync"
 	"time"
 
@@ -16,43 +17,48 @@ import (
 const WarningTopic string = "warnings"
 
 type Warning struct {
-	ID            string         `json:"id"`
-	UpdatedAt     time.Time      `json:"updatedAt,omitzero"`
-	Issued        time.Time      `json:"issued"`
-	Starts        *time.Time     `json:"starts,omitzero"`
-	Expires       time.Time      `json:"expires"`
-	Ends          time.Time      `json:"ends,omitzero"`
-	EndInitial    time.Time      `json:"endInitial,omitzero"`
-	Text          string         `json:"text"`
-	WFO           string         `json:"wfo"`
-	Action        string         `json:"action"`
-	Class         string         `json:"class"`
-	Phenomena     string         `json:"phenomena"`
-	Significance  string         `json:"significance"`
-	EventNumber   int            `json:"eventNumber"`
-	Year          int            `json:"year"`
-	Title         string         `json:"title"`
-	IsEmergency   bool           `json:"isEmergency"`
-	IsPDS         bool           `json:"isPDS"`
-	Geom          *geos.Geom     `json:"geom,omitempty"`
-	Direction     *int           `json:"direction"`
-	Location      *geos.Geom     `json:"location"`
-	Speed         *int           `json:"speed"`
-	SpeedText     *string        `json:"speedText"`
-	TMLTime       *time.Time     `json:"tmlTime"`
-	UGC           map[string]UGC `json:"ugc"`
-	Tornado       string         `json:"tornado,omitempty"`
-	Damage        string         `json:"damage,omitempty"`
-	HailThreat    string         `json:"hailThreat,omitempty"`
-	HailTag       string         `json:"hailTag,omitempty"`
-	WindThreat    string         `json:"windThreat,omitempty"`
-	WindTag       string         `json:"windTag,omitempty"`
-	FlashFlood    string         `json:"flashFlood,omitempty"`
-	RainfallTag   string         `json:"rainfallTag,omitempty"`
-	FloodTagDam   string         `json:"floodTagDam,omitempty"`
-	SpoutTag      string         `json:"spoutTag,omitempty"`
-	SnowSquall    string         `json:"snowSquall,omitempty"`
-	SnowSquallTag string         `json:"snowSquall_tag,omitempty"`
+	ID             int            `json:"id"`
+	WarningID      string         `json:"warningID"`
+	UpdatedAt      time.Time      `json:"updatedAt,omitzero"`
+	Issued         time.Time      `json:"issued"`
+	Starts         *time.Time     `json:"starts,omitzero"`
+	Expires        time.Time      `json:"expires"`
+	Ends           time.Time      `json:"ends,omitzero"`
+	ExpiresInitial time.Time      `json:"expires_initial,omitzero"`
+	Text           string         `json:"text"`
+	WFO            string         `json:"wfo"`
+	Action         string         `json:"action"`
+	Class          string         `json:"class"`
+	Phenomena      string         `json:"phenomena"`
+	Significance   string         `json:"significance"`
+	EventNumber    int            `json:"eventNumber"`
+	Year           int            `json:"year"`
+	Title          string         `json:"title"`
+	IsEmergency    bool           `json:"isEmergency"`
+	IsPDS          bool           `json:"isPDS"`
+	Geom           *geos.Geom     `json:"geom,omitempty"`
+	Direction      *int           `json:"direction"`
+	Location       *geos.Geom     `json:"location"`
+	Speed          *int           `json:"speed"`
+	SpeedText      *string        `json:"speedText"`
+	TMLTime        *time.Time     `json:"tmlTime"`
+	UGC            map[string]UGC `json:"ugc"`
+	Tornado        string         `json:"tornado,omitempty"`
+	Damage         string         `json:"damage,omitempty"`
+	HailThreat     string         `json:"hailThreat,omitempty"`
+	HailTag        string         `json:"hailTag,omitempty"`
+	WindThreat     string         `json:"windThreat,omitempty"`
+	WindTag        string         `json:"windTag,omitempty"`
+	FlashFlood     string         `json:"flashFlood,omitempty"`
+	RainfallTag    string         `json:"rainfallTag,omitempty"`
+	FloodTagDam    string         `json:"floodTagDam,omitempty"`
+	SpoutTag       string         `json:"spoutTag,omitempty"`
+	SnowSquall     string         `json:"snowSquall,omitempty"`
+	SnowSquallTag  string         `json:"snowSquall_tag,omitempty"`
+}
+
+func (w *Warning) CompositeID() string {
+	return fmt.Sprintf("%s-%v", w.WarningID, w.ID)
 }
 
 func (w *Warning) MarshalJSON() ([]byte, error) {
@@ -83,7 +89,7 @@ type WarningManager struct {
 	hub         *Hub
 	rabbitQueue amqp.Queue
 
-	data        map[string]*Warning
+	data        map[string]map[int]*Warning
 	subscribers map[*client]struct{}
 
 	ticker *time.Ticker
@@ -99,7 +105,7 @@ func NewWarningManager(hub *Hub) *WarningManager {
 
 	store := &WarningManager{
 		hub:         hub,
-		data:        map[string]*Warning{},
+		data:        map[string]map[int]*Warning{},
 		subscribers: map[*client]struct{}{},
 		ticker:      ticker,
 	}
@@ -147,7 +153,12 @@ func (manager *WarningManager) Load() error {
 	for _, warning := range warnings {
 		id := warning.GenerateID()
 
-		manager.data[id] = manager.modelToWarning(id, *warning)
+		_, ok := manager.data[id]
+		if !ok {
+			manager.data[id] = map[int]*Warning{warning.ID: manager.modelToWarning(*warning)}
+		} else {
+			manager.data[id][warning.ID] = manager.modelToWarning(*warning)
+		}
 	}
 
 	log.Debug().Int("size", len(manager.data)).Msg("loaded warning data")
@@ -174,6 +185,7 @@ func (manager *WarningManager) Run() {
 		for {
 			select {
 			case t := <-manager.ticker.C:
+				manager.ticker.Reset(60 * time.Second)
 				manager.checkExpired(t)
 			case message := <-d:
 				warning := &models.Warning{}
@@ -181,8 +193,7 @@ func (manager *WarningManager) Run() {
 					log.Error().Err(err).Msg("failed to unmarshal warning message")
 					continue
 				}
-				id := message.MessageId
-				err := manager.handleUpdate(id, *warning)
+				err := manager.handleUpdate(*warning, message.Type)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to handle warning update")
 					continue
@@ -200,8 +211,10 @@ func (manager *WarningManager) Subscribe(c *client) {
 	manager.subscribers[c] = struct{}{}
 
 	warnings := []*Warning{}
-	for _, w := range manager.data {
-		warnings = append(warnings, w)
+	for _, list := range manager.data {
+		for _, w := range list {
+			warnings = append(warnings, w)
+		}
 	}
 
 	// Marshal the warnings slice to JSON
@@ -239,23 +252,13 @@ func (manager *WarningManager) Unsubscribe(c *client) {
 	delete(manager.subscribers, c)
 }
 
-func (manager *WarningManager) handleUpdate(id string, w models.Warning) error {
+func (manager *WarningManager) handleUpdate(w models.Warning, eventType string) error {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	newWarning := manager.modelToWarning(id, w)
+	warning := manager.modelToWarning(w)
 
-	var eventType string
-	switch newWarning.Action {
-	case "NEW", "EXA", "EXB":
-		eventType = EnvelopeNew
-	case "CAN", "UPG", "EXP":
-		eventType = EnvelopeDelete
-	default:
-		eventType = EnvelopeUpdate
-	}
-
-	warningBytes, err := json.Marshal(newWarning)
+	warningBytes, err := json.Marshal(warning)
 	if err != nil {
 		return err
 	}
@@ -263,7 +266,7 @@ func (manager *WarningManager) handleUpdate(id string, w models.Warning) error {
 	envelope := Envelope{
 		Type:      eventType,
 		Product:   WarningTopic,
-		ID:        newWarning.ID,
+		ID:        warning.CompositeID(),
 		Timestamp: time.Now(),
 		Data:      warningBytes,
 	}
@@ -278,65 +281,17 @@ func (manager *WarningManager) handleUpdate(id string, w models.Warning) error {
 	}
 
 	// See if we have the warning already
-	warning, ok := manager.data[id]
-	if !ok {
-		if newWarning.Action == "CAN" || newWarning.Action == "UPG" || newWarning.Action == "EXP" {
-			return nil
-		}
-		manager.data[id] = newWarning
-		return nil
-	}
-
-	if newWarning.Action == "CAN" || newWarning.Action == "UPG" || newWarning.Action == "EXP" {
-		codes := []string{}
-		for _, ugc := range newWarning.UGC {
-			_, ok := warning.UGC[ugc.Code]
-			if ok {
-				codes = append(codes, ugc.Code)
+	if _, ok := manager.data[warning.WarningID]; ok {
+		if eventType == streaming.EventDelete {
+			delete(manager.data, warning.WarningID)
+		} else {
+			if _, ok := manager.data[warning.WarningID][warning.ID]; ok {
+				manager.data[warning.WarningID][warning.ID] = warning
 			}
 		}
-		for _, code := range codes {
-			delete(warning.UGC, code)
-		}
-
-		if len(warning.UGC) == 0 {
-			delete(manager.data, id)
-			return nil
-		}
-	} else {
-		for _, ugc := range newWarning.UGC {
-			_, ok := warning.UGC[ugc.Code]
-			if !ok {
-				warning.UGC[ugc.Code] = ugc
-			}
-		}
+	} else if eventType != streaming.EventDelete {
+		manager.data[warning.WarningID] = map[int]*Warning{warning.ID: warning}
 	}
-
-	warning.Expires = newWarning.Expires
-	warning.Ends = newWarning.Ends
-	warning.Text = newWarning.Text
-	warning.Action = newWarning.Action
-	warning.Title = newWarning.Title
-	warning.IsEmergency = newWarning.IsEmergency
-	warning.IsPDS = newWarning.IsPDS
-	warning.Geom = newWarning.Geom
-	warning.Direction = newWarning.Direction
-	warning.Location = newWarning.Location
-	warning.Speed = newWarning.Speed
-	warning.SpeedText = newWarning.SpeedText
-	warning.TMLTime = newWarning.TMLTime
-	warning.Tornado = newWarning.Tornado
-	warning.Damage = newWarning.Damage
-	warning.HailThreat = newWarning.HailThreat
-	warning.HailTag = newWarning.HailTag
-	warning.WindThreat = newWarning.WindThreat
-	warning.WindTag = newWarning.WindTag
-	warning.FlashFlood = newWarning.FlashFlood
-	warning.RainfallTag = newWarning.RainfallTag
-	warning.FloodTagDam = newWarning.FloodTagDam
-	warning.SpoutTag = newWarning.SpoutTag
-	warning.SnowSquall = newWarning.SnowSquall
-	warning.SnowSquallTag = newWarning.SnowSquallTag
 
 	return nil
 }
@@ -345,23 +300,47 @@ func (manager *WarningManager) checkExpired(t time.Time) {
 	manager.mu.Lock()
 	defer manager.mu.Unlock()
 
-	toDelete := []string{}
-	for id, warning := range manager.data {
-		if warning.Ends.Before(t) {
-			toDelete = append(toDelete, id)
+	toDelete := []*Warning{}
+	for _, bucket := range manager.data {
+		for _, warning := range bucket {
+			if warning.Ends.Before(t) {
+				toDelete = append(toDelete, warning)
+			}
 		}
 	}
 
-	for _, id := range toDelete {
-		delete(manager.data, id)
-	}
-
 	if len(toDelete) > 0 {
+		for _, warning := range toDelete {
+			delete(manager.data[warning.WarningID], warning.ID)
+
+			warningBytes, err := json.Marshal(warning)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to marshal warning for expired warning")
+			}
+
+			envelope := Envelope{
+				Type:      EnvelopeDelete,
+				Product:   WarningTopic,
+				ID:        warning.CompositeID(),
+				Timestamp: time.Now(),
+				Data:      warningBytes,
+			}
+
+			envelopeBytes, err := json.Marshal(envelope)
+			if err != nil {
+				log.Error().Err(err).Msg("failed to marshal envelope for expired warning")
+			}
+
+			for client := range manager.subscribers {
+				client.send <- envelopeBytes
+			}
+		}
+
 		log.Debug().Int("deleted", len(toDelete)).Msg("deleted expired warnings")
 	}
 }
 
-func (manager *WarningManager) modelToWarning(id string, w models.Warning) *Warning {
+func (manager *WarningManager) modelToWarning(w models.Warning) *Warning {
 
 	ugcs := map[string]UGC{}
 
@@ -373,42 +352,43 @@ func (manager *WarningManager) modelToWarning(id string, w models.Warning) *Warn
 	}
 
 	return &Warning{
-		ID:            id,
-		UpdatedAt:     w.UpdatedAt,
-		Issued:        w.Issued,
-		Starts:        w.Starts,
-		Expires:       w.Expires,
-		Ends:          w.Ends,
-		EndInitial:    w.EndInitial,
-		Text:          w.Text,
-		WFO:           w.WFO,
-		Action:        w.Action,
-		Class:         w.Class,
-		Phenomena:     w.Phenomena,
-		Significance:  w.Significance,
-		EventNumber:   w.EventNumber,
-		Year:          w.Year,
-		Title:         w.Title,
-		IsEmergency:   w.IsEmergency,
-		IsPDS:         w.IsPDS,
-		Geom:          w.Geom,
-		Direction:     w.Direction,
-		Location:      w.Location,
-		Speed:         w.Speed,
-		SpeedText:     w.SpeedText,
-		TMLTime:       w.TMLTime,
-		UGC:           ugcs,
-		Tornado:       w.Tornado,
-		Damage:        w.Damage,
-		HailThreat:    w.HailThreat,
-		HailTag:       w.HailTag,
-		WindThreat:    w.WindThreat,
-		WindTag:       w.WindTag,
-		FlashFlood:    w.FlashFlood,
-		RainfallTag:   w.RainfallTag,
-		FloodTagDam:   w.FloodTagDam,
-		SpoutTag:      w.SpoutTag,
-		SnowSquall:    w.SnowSquall,
-		SnowSquallTag: w.SnowSquallTag,
+		ID:             w.ID,
+		WarningID:      w.GenerateCompositeID(),
+		UpdatedAt:      w.UpdatedAt,
+		Issued:         w.Issued,
+		Starts:         w.Starts,
+		Expires:        w.Expires,
+		Ends:           w.Ends,
+		ExpiresInitial: w.ExpiresInitial,
+		Text:           w.Text,
+		WFO:            w.WFO,
+		Action:         w.Action,
+		Class:          w.Class,
+		Phenomena:      w.Phenomena,
+		Significance:   w.Significance,
+		EventNumber:    w.EventNumber,
+		Year:           w.Year,
+		Title:          w.Title,
+		IsEmergency:    w.IsEmergency,
+		IsPDS:          w.IsPDS,
+		Geom:           w.Geom,
+		Direction:      w.Direction,
+		Location:       w.Location,
+		Speed:          w.Speed,
+		SpeedText:      w.SpeedText,
+		TMLTime:        w.TMLTime,
+		UGC:            ugcs,
+		Tornado:        w.Tornado,
+		Damage:         w.Damage,
+		HailThreat:     w.HailThreat,
+		HailTag:        w.HailTag,
+		WindThreat:     w.WindThreat,
+		WindTag:        w.WindTag,
+		FlashFlood:     w.FlashFlood,
+		RainfallTag:    w.RainfallTag,
+		FloodTagDam:    w.FloodTagDam,
+		SpoutTag:       w.SpoutTag,
+		SnowSquall:     w.SnowSquall,
+		SnowSquallTag:  w.SnowSquallTag,
 	}
 }
