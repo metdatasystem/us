@@ -227,6 +227,20 @@ func (product *Product) FindBroadcastInstructions() string {
 	return bilRegexp.FindString(product.Text)
 }
 
+func (product *Product) GetVTECs() map[string]VTEC {
+	vtecs := map[string]VTEC{}
+
+	for _, segment := range product.Segments {
+		for _, vtec := range segment.VTEC {
+			if _, ok := vtecs[vtec.Original]; !ok {
+				vtecs[vtec.Original] = vtec
+			}
+		}
+	}
+
+	return vtecs
+}
+
 func (segment *ProductSegment) HasVTEC() bool {
 	return len(segment.VTEC) != 0
 }

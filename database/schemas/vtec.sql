@@ -4,8 +4,7 @@ ALTER SCHEMA vtec OWNER TO mds;
 -- Phenomena types
 CREATE TABLE IF NOT EXISTS vtec.phenomena (
     id char(2) PRIMARY KEY,
-    name varchar(64) NOT NULL,
-    description varchar(64)
+    name varchar(64) NOT NULL
 );
 ALTER TABLE vtec.phenomena OWNER TO mds;
 GRANT SELECT ON TABLE vtec.phenomena TO awips_service;
@@ -14,8 +13,7 @@ GRANT SELECT ON TABLE vtec.phenomena TO nobody, api_service;
 -- Significance levels
 CREATE TABLE IF NOT EXISTS vtec.significance (
     id char(1) PRIMARY KEY,
-    name varchar(64) NOT NULL,
-    description varchar(64)
+    name varchar(64) NOT NULL
 );
 ALTER TABLE vtec.significance OWNER TO mds;
 GRANT SELECT ON TABLE vtec.significance TO awips_service;
@@ -24,47 +22,52 @@ GRANT SELECT ON TABLE vtec.significance TO nobody, api_service;
 -- Action types
 CREATE TABLE IF NOT EXISTS vtec.action (
     id char(3) PRIMARY KEY,
-    name varchar(64) NOT NULL,
-    description varchar(64)
+    name varchar(64) NOT NULL
 );
 ALTER TABLE vtec.action OWNER TO mds;
 GRANT SELECT ON TABLE vtec.action TO awips_service;
 GRANT SELECT ON TABLE vtec.action TO nobody, api_service;
 
--- VTEC Event --
+-- VTEC Events
 CREATE TABLE IF NOT EXISTS vtec.events (
-    id serial,
+    -- Composite key
+    phenomena char(2) NOT NULL REFERENCES vtec.phenomena(id),
+    significance char(1) NOT NULL REFERENCES vtec.significance(id),
+    wfo char(4) NOT NULL REFERENCES postgis.offices(icao),
+    event_number smallint NOT NULL,
+    year smallint NOT NULL,
+
+    -- Stuff
+    class char(1) NOT NULL,
+    title varchar(128) NOT NULL,
+    is_emergency boolean DEFAULT false,
+    is_pds boolean DEFAULT false,
+
+    -- State
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
     issued timestamptz NOT NULL,
     starts timestamptz,
     expires timestamptz NOT NULL,
     ends timestamptz DEFAULT NULL,
-    end_initial timestamptz DEFAULT NULL,
-    class char(1) NOT NULL,
-    phenomena char(2) NOT NULL REFERENCES vtec.phenomena(id),
-    wfo char(4) NOT NULL REFERENCES postgis.offices(icao),
-    significance char(1) NOT NULL REFERENCES vtec.significance(id),
-    event_number smallint NOT NULL,
-    year smallint NOT NULL,
-    title varchar(128) NOT NULL,
-    is_emergency boolean DEFAULT false,
-    is_pds boolean DEFAULT false,
-	PRIMARY KEY (wfo, phenomena, significance, event_number, year)
+    ends_initial timestamptz DEFAULT NULL,
+
+    PRIMARY KEY (phenomena, significance, wfo, event_number, year)
 ) PARTITION BY LIST (year);
 ALTER TABLE vtec.events OWNER TO mds;
 GRANT ALL ON TABLE vtec.events TO awips_service;
 GRANT SELECT ON TABLE vtec.events TO nobody, api_service;
 
--- VTEC UGC --
+-- VTEC UGC
 CREATE TABLE IF NOT EXISTS vtec.ugcs (
     id serial,
     created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
     updated_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    wfo char(4) NOT NULL,
     phenomena char(2) NOT NULL,
     significance char(1) NOT NULL,
+    wfo char(4) NOT NULL,
     event_number smallint NOT NULL,
+    year smallint NOT NULL,
     ugc integer NOT NULL REFERENCES postgis.ugcs(id),
     issued timestamptz NOT NULL,
     starts timestamptz DEFAULT NULL,
@@ -72,35 +75,28 @@ CREATE TABLE IF NOT EXISTS vtec.ugcs (
     ends timestamptz DEFAULT NULL,
     end_initial timestamptz DEFAULT NULL,
     action char(3) NOT NULL REFERENCES vtec.action(id),
-    year smallint NOT NULL,
-	FOREIGN KEY (wfo, phenomena, significance, event_number, year) 
-        REFERENCES vtec.events(wfo, phenomena, significance, event_number, year) ON DELETE CASCADE,
-    PRIMARY KEY (wfo, phenomena, significance, event_number, year, ugc)
+	FOREIGN KEY (phenomena, significance, wfo, event_number, year) 
+        REFERENCES vtec.events(phenomena, significance, wfo, event_number, year) ON DELETE CASCADE,
+    PRIMARY KEY (phenomena, significance, wfo, event_number, year, ugc)
 ) PARTITION BY LIST (year);
 ALTER TABLE vtec.ugcs OWNER TO mds;
 GRANT ALL ON TABLE vtec.ugcs TO awips_service;
 GRANT SELECT ON TABLE vtec.ugcs TO nobody, api_service;
 
--- VTEC Event Updates --
+-- VTEC Updates
 CREATE TABLE IF NOT EXISTS vtec.updates (
-    id serial,
-    created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
-    issued timestamptz NOT NULL,
-    starts timestamptz DEFAULT NULL,
-    expires timestamptz NOT NULL,
-    ends timestamptz DEFAULT NULL,
-    text text NOT NULL,
-    product varchar(38) NOT NULL,
-    wfo char(4) NOT NULL,
-    action char(3) NOT NULL,
-    class char(1) NOT NULL,
-    phenomena char(2) NOT NULL,
-    significance char(1) NOT NULL,
+    id bigserial,
+
+    -- Composite key
+    phenomena char(2) NOT NULL REFERENCES vtec.phenomena(id),
+    significance char(1) NOT NULL REFERENCES vtec.significance(id),
+    wfo char(4) NOT NULL REFERENCES postgis.offices(icao),
     event_number smallint NOT NULL,
     year smallint NOT NULL,
-    title varchar(128) NOT NULL,
-    is_emergency boolean DEFAULT false,
-    is_pds boolean DEFAULT false,
+
+    class char(1) NOT NULL,
+
+    -- Geospatial
     geom geometry(Polygon, 4326),
     direction int,
     location geometry(MultiPoint, 4326),
@@ -108,6 +104,19 @@ CREATE TABLE IF NOT EXISTS vtec.updates (
     speed_text varchar(30),
     tml_time timestamptz,
     ugc char(6)[],
+
+    -- State
+    action char(3) NOT NULL REFERENCES vtec.action(id),
+    created_at timestamptz DEFAULT CURRENT_TIMESTAMP,
+    issued timestamptz NOT NULL,
+    starts timestamptz,
+    expires timestamptz NOT NULL,
+    ends timestamptz DEFAULT NULL,
+    title varchar(128) NOT NULL,
+    is_emergency boolean DEFAULT false,
+    is_pds boolean DEFAULT false,
+
+    -- Event tags
     tornado varchar(64),
     damage varchar(64),
     hail_threat varchar(64),
@@ -120,10 +129,15 @@ CREATE TABLE IF NOT EXISTS vtec.updates (
     spout_tag varchar(64),
     snow_squall varchar(64),
     snow_squall_tag varchar(64),
-	PRIMARY KEY (wfo, phenomena, significance, event_number, year, id),
-    CONSTRAINT fk_vtec_event
+
+    -- Porduct data
+    text text NOT NULL,
+    product varchar(38) NOT NULL,
+
+    PRIMARY KEY (year, id),  -- year first for partition pruning
     FOREIGN KEY (wfo, phenomena, significance, event_number, year)
-    REFERENCES vtec.events(wfo, phenomena, significance, event_number, year) ON DELETE CASCADE
+        REFERENCES vtec.events(wfo, phenomena, significance, event_number, year) 
+        ON DELETE CASCADE
 ) PARTITION BY LIST (year);
 ALTER TABLE vtec.updates OWNER TO mds;
 GRANT ALL ON TABLE vtec.updates TO awips_service;

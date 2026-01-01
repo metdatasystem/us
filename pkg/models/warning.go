@@ -9,48 +9,54 @@ import (
 )
 
 type Warning struct {
-	ID            int        `json:"id"`
-	CreatedAt     time.Time  `json:"created_at,omitzero"`
-	UpdatedAt     time.Time  `json:"updated_at,omitzero"`
-	Issued        time.Time  `json:"issued"`
-	Starts        *time.Time `json:"starts,omitzero"`
-	Expires       time.Time  `json:"expires"`
-	Ends          time.Time  `json:"ends,omitzero"`
-	EndInitial    time.Time  `json:"end_initial,omitzero"`
-	Text          string     `json:"text"`
-	WFO           string     `json:"wfo"`
-	Action        string     `json:"action"`
-	Class         string     `json:"class"`
-	Phenomena     string     `json:"phenomena"`
-	Significance  string     `json:"significance"`
-	EventNumber   int        `json:"event_number"`
-	Year          int        `json:"year"`
-	Title         string     `json:"title"`
-	IsEmergency   bool       `json:"is_emergency"`
-	IsPDS         bool       `json:"is_pds"`
-	Geom          *geos.Geom `json:"geom,omitempty"`
-	Direction     *int       `json:"direction"`
-	Location      *geos.Geom `json:"location,omitempty"`
-	Speed         *int       `json:"speed"`
-	SpeedText     *string    `json:"speed_text"`
-	TMLTime       *time.Time `json:"tml_time"`
-	UGC           []string   `json:"ugc"`
-	Tornado       string     `json:"tornado,omitempty"`
-	Damage        string     `json:"damage,omitempty"`
-	HailThreat    string     `json:"hail_threat,omitempty"`
-	HailTag       string     `json:"hail_tag,omitempty"`
-	WindThreat    string     `json:"wind_threat,omitempty"`
-	WindTag       string     `json:"wind_tag,omitempty"`
-	FlashFlood    string     `json:"flash_flood,omitempty"`
-	RainfallTag   string     `json:"rainfall_tag,omitempty"`
-	FloodTagDam   string     `json:"flood_tag_dam,omitempty"`
-	SpoutTag      string     `json:"spout_tag,omitempty"`
-	SnowSquall    string     `json:"snow_squall,omitempty"`
-	SnowSquallTag string     `json:"snow_squall_tag,omitempty"`
+	ID             int        `json:"id"`
+	Phenomena      string     `json:"phenomena"`
+	Significance   string     `json:"significance"`
+	WFO            string     `json:"wfo"`
+	EventNumber    int        `json:"event_number"`
+	Year           int        `json:"year"`
+	Action         string     `json:"action"`
+	Current        bool       `json:"current"`
+	CreatedAt      time.Time  `json:"created_at,omitzero"`
+	UpdatedAt      time.Time  `json:"updated_at,omitzero"`
+	Issued         time.Time  `json:"issued"`
+	Starts         *time.Time `json:"starts,omitzero"`
+	Expires        time.Time  `json:"expires"`
+	ExpiresInitial time.Time  `json:"expires_initial,omitzero"`
+	Ends           time.Time  `json:"ends,omitzero"`
+	Class          string     `json:"class"`
+	Title          string     `json:"title"`
+	IsEmergency    bool       `json:"is_emergency"`
+	IsPDS          bool       `json:"is_pds"`
+	Text           string     `json:"text"`
+	Product        string     `json:"product"`
+	Geom           *geos.Geom `json:"geom"`
+	Direction      *int       `json:"direction"`
+	Location       *geos.Geom `json:"location"`
+	Speed          *int       `json:"speed"`
+	SpeedText      *string    `json:"speed_text"`
+	TMLTime        *time.Time `json:"tml_time"`
+	UGC            []string   `json:"ugc"`
+	Tornado        string     `json:"tornado,omitempty"`
+	Damage         string     `json:"damage,omitempty"`
+	HailThreat     string     `json:"hail_threat,omitempty"`
+	HailTag        string     `json:"hail_tag,omitempty"`
+	WindThreat     string     `json:"wind_threat,omitempty"`
+	WindTag        string     `json:"wind_tag,omitempty"`
+	FlashFlood     string     `json:"flash_flood,omitempty"`
+	RainfallTag    string     `json:"rainfall_tag,omitempty"`
+	FloodTagDam    string     `json:"flood_tag_dam,omitempty"`
+	SpoutTag       string     `json:"spout_tag,omitempty"`
+	SnowSquall     string     `json:"snow_squall,omitempty"`
+	SnowSquallTag  string     `json:"snow_squall_tag,omitempty"`
 }
 
 func (warning *Warning) GenerateID() string {
 	return fmt.Sprintf("%v-%v-%v-%04v-%v", warning.WFO, warning.Phenomena, warning.Significance, warning.EventNumber, warning.Year)
+}
+
+func (warning *Warning) GenerateCompositeID() string {
+	return fmt.Sprintf("%s-%v", warning.GenerateID(), warning.ID)
 }
 
 func (w *Warning) MarshalJSON() ([]byte, error) {
@@ -58,8 +64,8 @@ func (w *Warning) MarshalJSON() ([]byte, error) {
 
 	aux := struct {
 		*Alias
-		Geom     []byte `json:"geom,omitempty"`
-		Location []byte `json:"location,omitempty"`
+		Geom     []byte `json:"geom"`
+		Location []byte `json:"location"`
 	}{
 		Alias: (*Alias)(w),
 	}
@@ -80,8 +86,8 @@ func (w *Warning) UnmarshalJSON(data []byte) error {
 
 	aux := struct {
 		*Alias
-		Geom     []byte `json:"geom,omitempty"`
-		Location []byte `json:"location,omitempty"`
+		Geom     []byte `json:"geom"`
+		Location []byte `json:"location"`
 	}{
 		Alias: (*Alias)(w),
 	}

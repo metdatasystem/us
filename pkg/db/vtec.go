@@ -37,10 +37,45 @@ func FindVTECEvent(db *pgxpool.Pool, wfo string, phenomena string, significance 
 	return event, nil
 }
 
+func FindVTECEventTX(tx pgx.Tx, wfo string, phenomena string, significance string, eventNumber int, year int) (*models.VTECEvent, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	// Lets check if the VTEC Event is already in the database
+	rows, err := tx.Query(ctx, `
+			SELECT * FROM vtec.events WHERE
+			wfo = $1 AND phenomena = $2 AND significance = $3 AND event_number = $4 AND year = $5
+			`, wfo, phenomena, significance, eventNumber, year)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	// Scan the row into the event struct
+	var event *models.VTECEvent
+	if rows.Next() {
+		event = &models.VTECEvent{}
+		if err := ScanVTECEvent(rows, event); err != nil {
+			return nil, err
+		}
+	}
+
+	return event, nil
+}
+
 // Scan a row into the VTEC Event struct
 func ScanVTECEvent(rows pgx.Rows, event *models.VTECEvent) error {
 	return rows.Scan(
-		&event.ID,
+		&event.Phenomena,
+		&event.Significance,
+		&event.WFO,
+		&event.EventNumber,
+		&event.Year,
+		&event.Class,
+		&event.Title,
+		&event.IsEmergency,
+		&event.IsPDS,
 		&event.CreatedAt,
 		&event.UpdatedAt,
 		&event.Issued,
@@ -48,15 +83,6 @@ func ScanVTECEvent(rows pgx.Rows, event *models.VTECEvent) error {
 		&event.Expires,
 		&event.Ends,
 		&event.EndInitial,
-		&event.Class,
-		&event.Phenomena,
-		&event.WFO,
-		&event.Significance,
-		&event.EventNumber,
-		&event.Year,
-		&event.Title,
-		&event.IsEmergency,
-		&event.IsPDS,
 	)
 }
 
@@ -64,7 +90,7 @@ func ScanVTECEvent(rows pgx.Rows, event *models.VTECEvent) error {
 func InsertVTECEvent(db *pgxpool.Pool, event *models.VTECEvent) error {
 
 	rows, err := db.Query(context.Background(), `
-				INSERT INTO vtec.events(issued, starts, expires, ends, end_initial, class, phenomena, wfo, 
+				INSERT INTO vtec.events(issued, starts, expires, ends, ends_initial, class, phenomena, wfo, 
 				significance, event_number, year, title, is_emergency, is_pds) VALUES
 				($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
 				`, event.Issued, event.Starts, event.Expires, event.Ends, event.EndInitial, event.Class,
@@ -74,7 +100,6 @@ func InsertVTECEvent(db *pgxpool.Pool, event *models.VTECEvent) error {
 	if err != nil {
 		return err
 	}
-
 	defer rows.Close()
 
 	// Scan the row into the event struct
@@ -165,6 +190,30 @@ func FindCurrentVTECEventUGCs(db *pgxpool.Pool, wfo string, phenomena string, si
 	defer cancel()
 
 	rows, err := db.Query(ctx, `
+	SELECT * FROM vtec.ugcs WHERE wfo = $1 AND phenomena = $2 AND significance = $3 AND event_number = $4 AND year = $5 AND action NOT IN ('CAN', 'UPG') AND expires > $6
+	`, wfo, phenomena, significance, eventNumber, year, expires)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var ugcs []*models.VTECUGC
+	for rows.Next() {
+		ugc := &models.VTECUGC{}
+		if err := ScanVTECUGC(rows, ugc); err != nil {
+			return nil, err
+		}
+		ugcs = append(ugcs, ugc)
+	}
+
+	return ugcs, nil
+}
+
+func FindCurrentVTECEventUGCsTX(tx pgx.Tx, wfo string, phenomena string, significance string, eventNumber int, year int, expires time.Time) ([]*models.VTECUGC, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	rows, err := tx.Query(ctx, `
 	SELECT * FROM vtec.ugcs WHERE wfo = $1 AND phenomena = $2 AND significance = $3 AND event_number = $4 AND year = $5 AND action NOT IN ('CAN', 'UPG') AND expires > $6
 	`, wfo, phenomena, significance, eventNumber, year, expires)
 	if err != nil {

@@ -3,6 +3,7 @@ package internal
 import (
 	"context"
 	"net/http"
+	"os"
 	"os/signal"
 	"syscall"
 	"time"
@@ -69,7 +70,7 @@ func Server(logLevel zerolog.Level) {
 
 	zerolog.SetGlobalLevel(logLevel)
 
-	db, err := newDatabasePool()
+	db, err := newDatabasePool(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Error().Err(err).Msg("failed to initialise database")
 		return

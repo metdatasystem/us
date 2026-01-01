@@ -13,7 +13,7 @@ import (
 func Local(path string, logLevel zerolog.Level) {
 	zerolog.SetGlobalLevel(logLevel)
 
-	db, err := newDatabasePool()
+	db, err := newDatabasePool(os.Getenv("DATABASE_URL"))
 	if err != nil {
 		log.Error().Err(err).Msg("failed to initialise database")
 		return
@@ -57,7 +57,7 @@ func process(path string, db *pgxpool.Pool, rabbit *amqp.Channel) {
 		}
 
 		for _, f := range files {
-			process(f.Name(), db, rabbit)
+			process(path+f.Name(), db, rabbit)
 		}
 	} else {
 		processFile(file, stat.Size(), db, rabbit)
@@ -74,4 +74,6 @@ func processFile(file *os.File, size int64, db *pgxpool.Pool, rabbit *amqp.Chann
 	text := string(data)
 
 	HandleText(text, time.Now(), db, rabbit)
+
+	time.Sleep(10 * time.Second)
 }
