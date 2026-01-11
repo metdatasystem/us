@@ -7,7 +7,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/metdatasystem/us/pkg/awips"
-	"github.com/metdatasystem/us/shared/models"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog"
 	zlog "github.com/rs/zerolog/log"
@@ -38,7 +37,7 @@ var routes = []Route{
 type Handler struct {
 	db        *pgxpool.Pool
 	rabbit    *amqp.Channel
-	dbProduct *models.AWIPSProduct
+	dbProduct *awipsProduct
 	product   *awips.Product
 	log       zerolog.Logger
 }

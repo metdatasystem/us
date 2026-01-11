@@ -2,17 +2,75 @@ package internal
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/metdatasystem/us/pkg/awips"
-	"github.com/metdatasystem/us/shared/models"
 	"github.com/metdatasystem/us/shared/streaming"
 	"github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
-	"github.com/twpayne/go-geos"
+	"github.com/twpayne/go-geom/encoding/ewkb"
 )
 
-func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC, ugcs []*models.UGCMinimal) error {
+type warning struct {
+	ID             int        `json:"id"`
+	Phenomena      string     `json:"phenomena"`
+	Significance   string     `json:"significance"`
+	WFO            string     `json:"wfo"`
+	EventNumber    int        `json:"event_number"`
+	Year           int        `json:"year"`
+	Action         string     `json:"action"`
+	Current        bool       `json:"current"`
+	CreatedAt      time.Time  `json:"created_at,omitzero"`
+	UpdatedAt      time.Time  `json:"updated_at,omitzero"`
+	Issued         time.Time  `json:"issued"`
+	Starts         *time.Time `json:"starts,omitzero"`
+	Expires        time.Time  `json:"expires"`
+	ExpiresInitial time.Time  `json:"expires_initial,omitzero"`
+	Ends           time.Time  `json:"ends,omitzero"`
+	Class          string     `json:"class"`
+	Title          string     `json:"title"`
+	IsEmergency    bool       `json:"is_emergency"`
+	IsPDS          bool       `json:"is_pds"`
+	Text           string     `json:"text"`
+	Product        string     `json:"product"`
+	Geom           []byte     `json:"geom"`
+	Direction      *int       `json:"direction"`
+	Locations      []byte     `json:"locations"`
+	Speed          *int       `json:"speed"`
+	SpeedText      *string    `json:"speed_text"`
+	TMLTime        *time.Time `json:"tml_time"`
+	UGC            []string   `json:"ugc"`
+	Tornado        string     `json:"tornado,omitempty"`
+	Damage         string     `json:"damage,omitempty"`
+	HailThreat     string     `json:"hail_threat,omitempty"`
+	HailTag        string     `json:"hail_tag,omitempty"`
+	WindThreat     string     `json:"wind_threat,omitempty"`
+	WindTag        string     `json:"wind_tag,omitempty"`
+	FlashFlood     string     `json:"flash_flood,omitempty"`
+	RainfallTag    string     `json:"rainfall_tag,omitempty"`
+	FloodTagDam    string     `json:"flood_tag_dam,omitempty"`
+	SpoutTag       string     `json:"spout_tag,omitempty"`
+	SnowSquall     string     `json:"snow_squall,omitempty"`
+	SnowSquallTag  string     `json:"snow_squall_tag,omitempty"`
+}
+
+// Generates an ID using the warning's WFO, phenomena, significance, event number, and year.
+//
+// Example: KOUN-SV-W-0001-2025
+func (warning *warning) GenerateID() string {
+	return fmt.Sprintf("%v-%v-%v-%04v-%v", warning.WFO, warning.Phenomena, warning.Significance, warning.EventNumber, warning.Year)
+}
+
+// Generates an ID using the warning's generated ID from [warning.GenerateID()], appending the unique integer ID from the database.
+//
+// Example: KOUN-SV-W-0001-2025-1
+func (warning *warning) GenerateCompositeID() string {
+	return fmt.Sprintf("%s-%v", warning.GenerateID(), warning.ID)
+}
+
+func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *vtecEvent, vtec awips.VTEC, ugcs []*ugcMinimal) error {
 	product := handler.product
 
 	yesterday := time.Now().Add(time.Hour * -24)
@@ -26,51 +84,63 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 		ugcList = append(ugcList, u.UGC)
 	}
 
-	var geom *geos.Geom
+	var (
+		err  error
+		geom []byte
+	)
 	if segment.LatLon != nil {
-		coords := segment.LatLon.ToFloatClosing()
-		geom = geos.NewPolygon([][][]float64{coords})
+		polygon, err := segment.LatLon.ToMultiPolygon()
+		if err != nil {
+			return fmt.Errorf("failed to get latlon polygon: %v", err.Error())
+		}
+		geom, err = ewkb.Marshal(polygon, ewkb.NDR)
+		if err != nil {
+			return fmt.Errorf("failed to marshal polygon: %v", err.Error())
+		}
 	} else if vtec.Action != "CAN" && vtec.Action != "UPG" && vtec.Action != "EXP" {
 		rows, err := handler.tx.Query(handler.ctx, `
-			SELECT ST_SimplifyPreserveTopology(ST_Union(geom), 0.0025) FROM postgis.ugcs WHERE valid_to IS NULL AND ugc = ANY($1)
+			SELECT ST_AsBinary(ST_SimplifyPreserveTopology(ST_Union(ST_MakeValid(geom)), 0.0025)) FROM postgis.ugcs WHERE valid_to IS NULL AND ugc = ANY($1)
 			`, ugcList)
 		if err != nil {
 			return err
 		}
 
 		if rows.Next() {
-			g := &geos.Geom{}
-			if err := rows.Scan(&g); err != nil {
+			b := []byte{}
+			if err := rows.Scan(&b); err != nil {
 				return err
 			}
-			geom = g
+			geom = b
+		}
+
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return fmt.Errorf("error getting simplified geometry: %v", err.Error())
 		}
 
 		rows.Close()
 
 	}
 
-	var direction *int
-	var locations *geos.Geom
-	var speed *int
-	var speedText *string
-	var tmlTime *time.Time
+	var (
+		direction *int
+		locations []byte
+		speed     *int
+		speedText *string
+		tmlTime   *time.Time
+	)
 	if segment.TML != nil {
 		direction = &segment.TML.Direction
-
-		points := []*geos.Geom{}
-		for _, location := range segment.TML.Locations {
-			point := geos.NewPoint(location.FlatCoords())
-			points = append(points, point)
+		locations, err = ewkb.Marshal(segment.TML.Locations, ewkb.NDR)
+		if err != nil {
+			return fmt.Errorf("failed to marshal locations: %v", err.Error())
 		}
-		locations = geos.NewCollection(geos.TypeIDMultiPoint, points)
-
 		speed = &segment.TML.Speed
 		speedText = &segment.TML.SpeedString
 		tmlTime = &segment.TML.Time
 	}
 
-	warning := &models.Warning{
+	warning := &warning{
 		Issued:         product.Issued,
 		Starts:         event.Starts,
 		Expires:        segment.UGC.Expires,
@@ -90,7 +160,7 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 		IsPDS:          segment.IsPDS(),
 		Geom:           geom,
 		Direction:      direction,
-		Location:       locations,
+		Locations:      locations,
 		Speed:          speed,
 		SpeedText:      speedText,
 		TMLTime:        tmlTime,
@@ -128,7 +198,7 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 
 			tempW := *warning
 			tempW.ID = id
-			data, err := tempW.MarshalJSON()
+			data, err := json.Marshal(tempW)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to marshal warning to publish from update")
 				continue
@@ -153,6 +223,10 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 				continue
 			}
 		}
+		if err := rows.Err(); err != nil {
+			rows.Close()
+			return fmt.Errorf("failed to update warning: %v", err.Error())
+		}
 		rows.Close()
 	}
 
@@ -170,7 +244,7 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 		   rainfall_tag, flood_tag_dam, spout_tag, snow_squall, snow_squall_tag
        ) VALUES (
 	       $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
-		   $19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37
+		   ST_GeomFromWKB($19, 4326), $20, ST_GeomFromWKB($21, 4326), $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35, $36, $37
        ) RETURNING id
        `,
 		warning.Issued,
@@ -193,7 +267,7 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 		warning.IsPDS,
 		warning.Geom,
 		warning.Direction,
-		warning.Location,
+		warning.Locations,
 		warning.Speed,
 		warning.SpeedText,
 		warning.TMLTime,
@@ -223,16 +297,11 @@ func (handler *vtecHandler) warning(segment *awips.ProductSegment, event *models
 		}
 		warning.ID = id
 	}
-
-	err = handler.handleWarningPublishing(warning)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to publish warning")
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("failed to insert warning: %v", err.Error())
 	}
 
-	return nil
-}
-
-func (handler *vtecHandler) handleWarningPublishing(warning *models.Warning) error {
 	if handler.rabbit == nil {
 		log.Warn().Msg("handler missing RabbitMQ channel. Not publishing warning")
 		return nil
@@ -241,7 +310,6 @@ func (handler *vtecHandler) handleWarningPublishing(warning *models.Warning) err
 	warningId := warning.GenerateID()
 	_, ok := handler.publishedWarnings[warningId]
 
-	var err error
 	switch warning.Action {
 	case "CAN", "UPG":
 		err = handler.publishWarning(warning, streaming.EventDelete)
@@ -260,8 +328,8 @@ func (handler *vtecHandler) handleWarningPublishing(warning *models.Warning) err
 	return nil
 }
 
-func (handler *vtecHandler) publishWarning(warning *models.Warning, eventType string) error {
-	data, err := warning.MarshalJSON()
+func (handler *vtecHandler) publishWarning(warning *warning, eventType string) error {
+	data, err := json.Marshal(warning)
 	if err != nil {
 		return err
 	}

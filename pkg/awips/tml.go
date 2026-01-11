@@ -12,15 +12,15 @@ import (
 
 // The rules of TIME...MOT...LOC information in text products is defined in NWS directive 10-1701 section 5.7.
 
-const TMLRegexp = `(?m:^(TIME\.\.\.MOT\.\.\.LOC)([A-Za-z0-9 \n]*))\n`
+const TMLRegexp = `(?m:^(TIME\.\.\.MOT\.\.\.LOC)([A-Za-z0-9 ]*\n)*)`
 
 type TML struct {
-	Original    string        `json:"original"`
-	Time        time.Time     `json:"time"`
-	Direction   int           `json:"direction"`
-	Speed       int           `json:"speed"`
-	SpeedString string        `json:"speedString"`
-	Locations   []*geom.Point `json:"location"`
+	Original    string           `json:"original"`
+	Time        time.Time        `json:"time"`
+	Direction   int              `json:"direction"`
+	Speed       int              `json:"speed"`
+	SpeedString string           `json:"speedString"`
+	Locations   *geom.MultiPoint `json:"location"`
 }
 
 // Find the TIME...MOT...LOC information in the text.
@@ -44,6 +44,9 @@ func ParseTML(text string, issued time.Time) (*TML, error) {
 
 	// Split the string into segments. Segments are separated by spaces.
 	segments := strings.Split(original, " ")[1:]
+	if len(segments) == 0 {
+		return nil, errors.New("tml segments is 0")
+	}
 
 	// Parse the time
 	parsedTime, err := time.Parse(("1504Z"), segments[0])
@@ -69,7 +72,7 @@ func ParseTML(text string, issued time.Time) (*TML, error) {
 		return nil, errors.New("could not parse speed in TML: " + err.Error())
 	}
 
-	points := []*geom.Point{}
+	points := geom.NewMultiPoint(geom.XY)
 
 	// Parse the location(s).
 	// TML information can contain multiple pairs of latitude and longitude information whether the product is talking about an event that is isolated to a single point or the event is occurring along a line
@@ -86,7 +89,10 @@ func ParseTML(text string, issued time.Time) (*TML, error) {
 		if err != nil {
 			return nil, errors.New("could not create point in TML: " + err.Error())
 		}
-		points = append(points, p)
+		err = points.Push(p)
+		if err != nil {
+			return nil, errors.New("could not push point to multipoint in TML: " + err.Error())
+		}
 	}
 
 	tml := TML{

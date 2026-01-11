@@ -9,13 +9,15 @@ import (
 
 func TestFindTML(t *testing.T) {
 	// Example from NWS Directive 10-1701
-	text := `TIME...MOT...LOC 0128Z 004DEG 9KT 3480 10318`
+	text := `TIME...MOT...LOC 0128Z 004DEG 9KT 3480 10318
+	`
 	tml := FindTML(text)
 	assert.NotEqual(t, "", tml)
 	assert.Equal(t, "TIME...MOT...LOC 0128Z 004DEG 9KT 3480 10318", tml)
 
 	// Multiple points
-	text = `TIME...MOT...LOC 0128Z 004DEG 9KT 3480 10318 3490 10420`
+	text = `TIME...MOT...LOC 0128Z 004DEG 9KT 3480 10318 3490 10420
+	`
 	tml = FindTML(text)
 	assert.NotEqual(t, "", tml)
 	assert.Equal(t, "TIME...MOT...LOC 0128Z 004DEG 9KT 3480 10318 3490 10420", tml)
@@ -47,9 +49,9 @@ func TestParseTML(t *testing.T) {
 	assert.Equal(t, 4, tml.Direction)
 	assert.Equal(t, 9, tml.Speed)
 	assert.Equal(t, "9KT", tml.SpeedString)
-	assert.Equal(t, 1, len(tml.Locations))
-	assert.Equal(t, 103.18, tml.Locations[0].X())
-	assert.Equal(t, 34.8, tml.Locations[0].Y())
+	assert.Equal(t, 1, tml.Locations.NumCoords())
+	assert.Equal(t, -103.18, tml.Locations.Coord(0).X())
+	assert.Equal(t, 34.8, tml.Locations.Coord(0).Y())
 
 	// Multiple locations
 	text = `TIME...MOT...LOC 0128Z 004DEG 9KT 3480 10318 3490 10420`
@@ -57,9 +59,9 @@ func TestParseTML(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, tml)
 	assert.Equal(t, "TIME...MOT...LOC 0128Z 004DEG 9KT 3480 10318 3490 10420", tml.Original)
-	assert.Equal(t, 2, len(tml.Locations))
-	assert.Equal(t, 104.2, tml.Locations[1].X())
-	assert.Equal(t, 34.9, tml.Locations[1].Y())
+	assert.Equal(t, 2, tml.Locations.NumCoords())
+	assert.Equal(t, -104.2, tml.Locations.Coord(1).X())
+	assert.Equal(t, 34.9, tml.Locations.Coord(1).Y())
 
 	// Multi Line TML
 	text = `TIME...MOT...LOC 0128Z 004DEG 9KT 3480 10318
@@ -68,12 +70,12 @@ func TestParseTML(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, tml)
 	assert.Equal(t, "TIME...MOT...LOC 0128Z 004DEG 9KT 3480 10318 3490 10420", tml.Original)
-	assert.Equal(t, 2, len(tml.Locations))
-	assert.Equal(t, 103.18, tml.Locations[0].X())
-	assert.Equal(t, 34.8, tml.Locations[0].Y())
-	assert.Equal(t, 2, len(tml.Locations))
-	assert.Equal(t, 104.2, tml.Locations[1].X())
-	assert.Equal(t, 34.9, tml.Locations[1].Y())
+	assert.Equal(t, 2, tml.Locations.NumCoords())
+	assert.Equal(t, -103.18, tml.Locations.Coord(0).X())
+	assert.Equal(t, 34.8, tml.Locations.Coord(0).Y())
+	assert.Equal(t, 2, tml.Locations.NumCoords())
+	assert.Equal(t, -104.2, tml.Locations.Coord(1).X())
+	assert.Equal(t, 34.9, tml.Locations.Coord(1).Y())
 
 	// Motion less than 1
 	text = `TIME...MOT...LOC 0128Z 004DEG 0KT 3480 10318`

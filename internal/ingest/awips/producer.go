@@ -49,7 +49,6 @@ func NewProducer() (*Producer, error) {
 
 func (p *Producer) Run() {
 	for message := range p.messages {
-
 		if p.done {
 			p.channel.Close()
 			return

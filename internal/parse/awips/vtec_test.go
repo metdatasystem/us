@@ -8,8 +8,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/metdatasystem/us/pkg/awips"
-	"github.com/metdatasystem/us/shared/db"
-	"github.com/metdatasystem/us/shared/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -102,11 +100,7 @@ func TestTornadoWarning(t *testing.T) {
 					SELECT * FROM vtec.events WHERE phenomena=$1 AND significance=$2 AND event_number=$3 AND wfo=$4 AND year=$5
 					`, vtec.Phenomena, vtec.Significance, vtec.EventNumber, vtec.WFO, year)
 				assert.NoError(t, err, "failed to query vtec events")
-				if assert.True(t, rows.Next(), "no vtec event row returned") {
-					event := &models.VTECEvent{}
-					err = db.ScanVTECEvent(rows, event)
-					assert.NoError(t, err, "failed to scan vtec event")
-				}
+				assert.True(t, rows.Next(), "no vtec event row returned")
 
 				rows.Close()
 
@@ -164,11 +158,7 @@ func TestWinterWeather(t *testing.T) {
 					SELECT * FROM vtec.events WHERE phenomena=$1 AND significance=$2 AND event_number=$3 AND wfo=$4 AND year=$5
 					`, vtec.Phenomena, vtec.Significance, vtec.EventNumber, vtec.WFO, year)
 				assert.NoError(t, err, "failed to query vtec events")
-				if assert.True(t, rows.Next(), "no vtec event row returned") {
-					event := &models.VTECEvent{}
-					err = db.ScanVTECEvent(rows, event)
-					assert.NoError(t, err, "failed to scan vtec event")
-				}
+				assert.True(t, rows.Next(), "no vtec event row returned")
 
 				rows.Close()
 

@@ -2,14 +2,92 @@ package internal
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/metdatasystem/us/pkg/awips"
-	"github.com/metdatasystem/us/shared/db"
-	"github.com/metdatasystem/us/shared/models"
-	"github.com/twpayne/go-geos"
+	"github.com/twpayne/go-geom/encoding/ewkb"
+	"github.com/twpayne/go-geom/encoding/ewkbhex"
 )
+
+type vtecEvent struct {
+	ID           int        `json:"id,omitempty"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	Issued       time.Time  `json:"issued"`
+	Starts       *time.Time `json:"starts"`
+	Expires      time.Time  `json:"expires"`
+	Ends         time.Time  `json:"ends"`
+	EndInitial   time.Time  `json:"end_initial"`
+	Class        string     `json:"class"`
+	Phenomena    string     `json:"phenomena"`
+	WFO          string     `json:"wfo"`
+	Significance string     `json:"significance"`
+	EventNumber  int        `json:"event_number"`
+	Year         int        `json:"year"`
+	Title        string     `json:"title"`
+	IsEmergency  bool       `json:"is_emergency"`
+	IsPDS        bool       `json:"is_pds"`
+}
+
+type vtecUpdate struct {
+	ID            int        `json:"id"`
+	CreatedAt     time.Time  `json:"created_at,omitempty"`
+	Issued        time.Time  `json:"issued"`
+	Starts        *time.Time `json:"starts,omitempty"`
+	Expires       time.Time  `json:"expires"`
+	Ends          time.Time  `json:"ends,omitempty"`
+	Text          string     `json:"text"`
+	Product       string     `json:"product"`
+	WFO           string     `json:"wfo"`
+	Action        string     `json:"action"`
+	Class         string     `json:"class"`
+	Phenomena     string     `json:"phenomena"`
+	Significance  string     `json:"significance"`
+	EventNumber   int        `json:"event_number"`
+	Year          int        `json:"year"`
+	Title         string     `json:"title"`
+	IsEmergency   bool       `json:"is_emergency"`
+	IsPDS         bool       `json:"is_pds"`
+	Geom          []byte     `json:"geom,omitempty"`
+	Direction     *int       `json:"direction"`
+	Location      []byte     `json:"location,omitempty"`
+	Speed         *int       `json:"speed"`
+	SpeedText     *string    `json:"speed_text"`
+	TMLTime       *time.Time `json:"tml_time"`
+	UGC           []string   `json:"ugc"`
+	Tornado       string     `json:"tornado,omitempty"`
+	Damage        string     `json:"damage,omitempty"`
+	HailThreat    string     `json:"hail_threat,omitempty"`
+	HailTag       string     `json:"hail_tag,omitempty"`
+	WindThreat    string     `json:"wind_threat,omitempty"`
+	WindTag       string     `json:"wind_tag,omitempty"`
+	FlashFlood    string     `json:"flash_flood,omitempty"`
+	RainfallTag   string     `json:"rainfall_tag,omitempty"`
+	FloodTagDam   string     `json:"flood_tag_dam,omitempty"`
+	SpoutTag      string     `json:"spout_tag,omitempty"`
+	SnowSquall    string     `json:"snow_squall,omitempty"`
+	SnowSquallTag string     `json:"snow_squall_tag,omitempty"`
+}
+
+type vtecUGC struct {
+	ID           int        `json:"id"`
+	CreatedAt    time.Time  `json:"created_at,omitempty"`
+	UpdatedAt    time.Time  `json:"updated_at,omitempty"`
+	WFO          string     `json:"wfo"`
+	Phenomena    string     `json:"phenomena"`
+	Significance string     `json:"significance"`
+	EventNumber  int        `json:"event_number"`
+	UGC          int        `json:"ugc"`
+	Issued       time.Time  `json:"issued"`
+	Starts       *time.Time `json:"starts,omitempty"`
+	Expires      time.Time  `json:"expires"`
+	Ends         time.Time  `json:"ends,omitempty"`
+	EndInitial   time.Time  `json:"end_initial,omitempty"`
+	Action       string     `json:"action"`
+	Year         int        `json:"year"`
+}
 
 type vtecHandler struct {
 	Handler
@@ -30,17 +108,18 @@ func (handler *vtecHandler) Handle() error {
 	product := handler.product
 	log := handler.log
 
+	var err error
+
 	// Initialise transaction
-	tx, err := handler.db.BeginTx(handler.ctx, pgx.TxOptions{})
+	handler.tx, err = handler.db.BeginTx(handler.ctx, pgx.TxOptions{})
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to begin transaction: %v", err.Error())
 	}
-	handler.tx = tx
-	defer tx.Rollback(handler.ctx)
+	defer handler.tx.Rollback(handler.ctx)
 
 	// Go through each segment...
 	for _, segment := range handler.product.Segments {
-		// ...and each VTEC line in the segment
+		// ...and each VTEC in the segment
 		for _, vtec := range segment.VTEC {
 			// Ignore these
 			// TODO: Could be helpful?
@@ -65,7 +144,7 @@ func (handler *vtecHandler) Handle() error {
 			}
 
 			// Try and find the event in the database
-			event, err := db.FindVTECEventTX(handler.tx, vtec.WFO, vtec.Phenomena, vtec.Significance, vtec.EventNumber, year)
+			event, err := handler.findEvent(vtec.WFO, vtec.Phenomena, vtec.Significance, vtec.EventNumber, year)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to find vtec event")
 				continue
@@ -75,30 +154,7 @@ func (handler *vtecHandler) Handle() error {
 			if event == nil {
 				log.Debug().Msg("inserting new vtec event")
 
-				event = &models.VTECEvent{
-					Issued:       product.Issued,
-					Starts:       vtec.Start,
-					Expires:      segment.UGC.Expires,
-					Ends:         *vtec.End,
-					EndInitial:   *vtec.End,
-					Class:        vtec.Class,
-					Phenomena:    vtec.Phenomena,
-					WFO:          vtec.WFO,
-					Significance: vtec.Significance,
-					EventNumber:  vtec.EventNumber,
-					Year:         year,
-					Title:        vtec.Title(segment.IsEmergency()),
-					IsEmergency:  segment.IsEmergency(),
-					IsPDS:        segment.IsPDS(),
-				}
-
-				_, err := tx.Exec(handler.ctx, `
-				INSERT INTO vtec.events(issued, starts, expires, ends, ends_initial, class, phenomena, wfo, 
-				significance, event_number, year, title, is_emergency, is_pds) VALUES
-				($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
-				`, event.Issued, event.Starts, event.Expires, event.Ends, event.EndInitial, event.Class,
-					event.Phenomena, event.WFO, event.Significance, event.EventNumber, event.Year, event.Title,
-					event.IsEmergency, event.IsPDS)
+				event, err = handler.createEvent(vtec, segment, year)
 				if err != nil {
 					log.Error().Err(err).Msg("failed to insert vtec event")
 					continue
@@ -108,12 +164,13 @@ func (handler *vtecHandler) Handle() error {
 			// Update event timings if needed
 			handler.updateTimes(segment, event, vtec)
 
+			// Some special stuff needs to be done for fire weather events
 			isFire := false
 			if vtec.Phenomena == "FW" {
 				isFire = true
 			}
 
-			ugcs, err := GetUGCs(handler.db, segment.UGC, isFire)
+			ugcs, err := getUGCs(handler.ctx, handler.tx, segment.UGC, isFire)
 			if err != nil {
 				log.Error().Err(err).Msg("failed to get ugcs for vtec event")
 				continue
@@ -149,14 +206,14 @@ func (handler *vtecHandler) Handle() error {
 
 	}
 
-	if err := tx.Commit(context.Background()); err != nil {
+	if err := handler.tx.Commit(handler.ctx); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func (handler *vtecHandler) updateTimes(segment awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC) {
+func (handler *vtecHandler) updateTimes(segment awips.ProductSegment, event *vtecEvent, vtec awips.VTEC) {
 	product := handler.product
 	log := handler.log
 
@@ -194,7 +251,134 @@ func (handler *vtecHandler) updateTimes(segment awips.ProductSegment, event *mod
 	}
 }
 
-func (handler *vtecHandler) createUpdate(segment *awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC, ugcs []*models.UGCMinimal) error {
+func (handler *vtecHandler) findEvent(wfo string, phenomena string, significance string, eventNumber int, year int) (*vtecEvent, error) {
+	rows, err := handler.tx.Query(handler.ctx, `
+			SELECT * FROM vtec.events WHERE
+			wfo = $1 AND phenomena = $2 AND significance = $3 AND event_number = $4 AND year = $5
+			`, wfo, phenomena, significance, eventNumber, year)
+	if err != nil {
+		return nil, err
+	}
+
+	defer rows.Close()
+
+	// Scan the row into the event struct
+	var event *vtecEvent
+	if rows.Next() {
+		event = &vtecEvent{}
+
+		if err :=
+			rows.Scan(
+				&event.Phenomena,
+				&event.Significance,
+				&event.WFO,
+				&event.EventNumber,
+				&event.Year,
+				&event.Class,
+				&event.Title,
+				&event.IsEmergency,
+				&event.IsPDS,
+				&event.CreatedAt,
+				&event.UpdatedAt,
+				&event.Issued,
+				&event.Starts,
+				&event.Expires,
+				&event.Ends,
+				&event.EndInitial,
+			); err != nil {
+			return nil, fmt.Errorf("failed to scan vtec event: %v", err.Error())
+		}
+	}
+
+	return event, nil
+}
+
+func (handler *vtecHandler) createEvent(vtec awips.VTEC, segment awips.ProductSegment, year int) (*vtecEvent, error) {
+	product := handler.product
+
+	event := &vtecEvent{
+		Issued:       product.Issued,
+		Starts:       vtec.Start,
+		Expires:      segment.UGC.Expires,
+		Ends:         *vtec.End,
+		EndInitial:   *vtec.End,
+		Class:        vtec.Class,
+		Phenomena:    vtec.Phenomena,
+		WFO:          vtec.WFO,
+		Significance: vtec.Significance,
+		EventNumber:  vtec.EventNumber,
+		Year:         year,
+		Title:        vtec.Title(segment.IsEmergency()),
+		IsEmergency:  segment.IsEmergency(),
+		IsPDS:        segment.IsPDS(),
+	}
+
+	_, err := handler.tx.Exec(handler.ctx, `
+				INSERT INTO vtec.events(issued, starts, expires, ends, ends_initial, class, phenomena, wfo, 
+				significance, event_number, year, title, is_emergency, is_pds) VALUES
+				($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14);
+				`, event.Issued, event.Starts, event.Expires, event.Ends, event.EndInitial, event.Class,
+		event.Phenomena, event.WFO, event.Significance, event.EventNumber, event.Year, event.Title,
+		event.IsEmergency, event.IsPDS)
+	if err != nil {
+		return nil, err
+	}
+
+	return event, nil
+}
+
+func (handler *vtecHandler) updateEvent(segment *awips.ProductSegment, event *vtecEvent, vtec awips.VTEC) {
+
+	_, err := handler.tx.Exec(handler.ctx, `
+	UPDATE vtec.events SET updated_at = CURRENT_TIMESTAMP, is_emergency = $6, is_pds = $7 WHERE
+			wfo = $1 AND phenomena = $2 AND significance = $3 AND event_number = $4 AND year = $5
+			`, vtec.WFO, vtec.Phenomena, vtec.Significance, vtec.EventNumber, event.Year, segment.IsEmergency(), segment.IsPDS())
+	if err != nil {
+		handler.log.Warn().Err(err).Str("vtec", vtec.Original).Msg("failed to update vtec event")
+		return
+	}
+}
+
+func (handler *vtecHandler) findCurrentVTECEventUGCs(wfo string, phenomena string, significance string, eventNumber int, year int, expires time.Time) ([]*vtecUGC, error) {
+
+	rows, err := handler.tx.Query(handler.ctx, `
+	SELECT * FROM vtec.ugcs WHERE wfo = $1 AND phenomena = $2 AND significance = $3 AND event_number = $4 AND year = $5 AND action NOT IN ('CAN', 'UPG') AND expires > $6
+	`, wfo, phenomena, significance, eventNumber, year, expires)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query vtec ugc: %v", err.Error())
+	}
+	defer rows.Close()
+
+	var ugcs []*vtecUGC
+	for rows.Next() {
+		ugc := &vtecUGC{}
+		if err := rows.Scan(
+			&ugc.ID,
+			&ugc.CreatedAt,
+			&ugc.UpdatedAt,
+			&ugc.Phenomena,
+			&ugc.Significance,
+			&ugc.WFO,
+			&ugc.EventNumber,
+			&ugc.Year,
+			&ugc.UGC,
+			&ugc.Issued,
+			&ugc.Starts,
+			&ugc.Expires,
+			&ugc.Ends,
+			&ugc.EndInitial,
+			&ugc.Action,
+		); err != nil {
+			return nil, fmt.Errorf("failed to scan vtec ugc: %v", err.Error())
+		}
+		ugcs = append(ugcs, ugc)
+	}
+
+	return ugcs, rows.Err()
+}
+
+// Assembles and creates a VTEC Update.
+func (handler *vtecHandler) createUpdate(segment *awips.ProductSegment, event *vtecEvent, vtec awips.VTEC, ugcs []*ugcMinimal) error {
 
 	product := handler.product
 	dbProduct := handler.dbProduct
@@ -204,33 +388,37 @@ func (handler *vtecHandler) createUpdate(segment *awips.ProductSegment, event *m
 		ugc = append(ugc, u.UGC)
 	}
 
-	var polygon *geos.Geom
+	var err error
+	var polygon []byte
 	if segment.LatLon != nil {
-		coords := segment.LatLon.ToFloatClosing()
-		polygon = geos.NewPolygon([][][]float64{coords})
+		p, err := segment.LatLon.ToPolygon()
+		if err != nil {
+			return fmt.Errorf("failed to get latlon polygon: %v", err.Error())
+		}
+		polygon, err = ewkb.Marshal(p, ewkbhex.NDR)
+		if err != nil {
+			return fmt.Errorf("failed to encode polygon: %v", err.Error())
+		}
 	}
 
 	var direction *int
-	var locations *geos.Geom
+	var locations []byte
 	var speed *int
 	var speedText *string
 	var tmlTime *time.Time
 	if segment.TML != nil {
 		direction = &segment.TML.Direction
-
-		points := []*geos.Geom{}
-		for _, location := range segment.TML.Locations {
-			point := geos.NewPoint(location.FlatCoords())
-			points = append(points, point)
+		l := segment.TML.Locations
+		locations, err = ewkb.Marshal(l, ewkb.NDR)
+		if err != nil {
+			return fmt.Errorf("failed to encode tml locations: %v", err.Error())
 		}
-		locations = geos.NewCollection(geos.TypeIDMultiPoint, points)
-
 		speed = &segment.TML.Speed
 		speedText = &segment.TML.SpeedString
 		tmlTime = &segment.TML.Time
 	}
 
-	update := &models.VTECUpdate{
+	update := &vtecUpdate{
 		Issued:        product.Issued,
 		Starts:        event.Starts,
 		Expires:       segment.UGC.Expires,
@@ -268,28 +456,28 @@ func (handler *vtecHandler) createUpdate(segment *awips.ProductSegment, event *m
 		SnowSquallTag: segment.Tags["snowSquallImpact"],
 	}
 
-	_, err := handler.tx.Exec(handler.ctx, `
+	_, err = handler.tx.Exec(handler.ctx, `
 	INSERT INTO vtec.updates(issued, starts, expires, ends, text, product, 
 	wfo, action, class, phenomena, significance, event_number, year, title, 
 	is_emergency, is_pds, geom, direction, location, speed, speed_text, tml_time, 
 	ugc, tornado, damage, hail_threat, hail_tag, wind_threat, wind_tag, flash_flood, 
 	rainfall_tag, flood_tag_dam, spout_tag, snow_squall, snow_squall_tag)
 	VALUES
-	($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, 
-	$19, $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
+	($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, ST_GeomFromWKB($17, 4326), $18, 
+	ST_GeomFromWKB($19, 4326), $20, $21, $22, $23, $24, $25, $26, $27, $28, $29, $30, $31, $32, $33, $34, $35)
 	`, update.Issued, update.Starts, update.Expires, update.Ends, update.Text, update.Product,
 		update.WFO, update.Action, update.Class, update.Phenomena, update.Significance, update.EventNumber, update.Year, update.Title,
 		update.IsEmergency, update.IsPDS, update.Geom, update.Direction, update.Location, update.Speed, update.SpeedText, update.TMLTime,
 		update.UGC, update.Tornado, update.Damage, update.HailThreat, update.HailTag, update.WindThreat, update.WindTag, update.FlashFlood,
 		update.RainfallTag, update.FloodTagDam, update.SpoutTag, update.SnowSquall, update.SnowSquallTag)
 	if err != nil {
-		return err
+		return fmt.Errorf("vtec update query failed: %v", err.Error())
 	}
 
 	return nil
 }
 
-func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC, ugcs []*models.UGCMinimal) error {
+func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *vtecEvent, vtec awips.VTEC, ugcs []*ugcMinimal) error {
 
 	dbProduct := handler.dbProduct
 	log := handler.log
@@ -311,18 +499,18 @@ func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *models.
 		end = *vtec.End
 	}
 
-	currentUGCs, err := db.FindCurrentVTECEventUGCsTX(handler.tx, handler.ctx, event.WFO, event.Phenomena, event.Significance, event.EventNumber, event.Year, expires)
+	currentUGCs, err := handler.findCurrentVTECEventUGCs(event.WFO, event.Phenomena, event.Significance, event.EventNumber, event.Year, expires)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to find current vtec ugcs: %v", err.Error())
 	}
 
 	duplicates := 0
 	deleted := 0
 
-	approved := []*models.UGCMinimal{}
+	approved := []*ugcMinimal{}
 
 	for _, ugc := range ugcs {
-		var current *models.VTECUGC
+		var current *vtecUGC
 		for _, c := range currentUGCs {
 			if ugc.ID == c.UGC {
 				current = c
@@ -347,11 +535,12 @@ func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *models.
 	}
 
 	if duplicates > 0 {
-		log.Warn().Int("duplicates", duplicates).Int("deleted", deleted).Bool("correction", handler.product.IsCorrection()).Str("vtec", vtec.Original).Msg("found existing ugcs for vtec event")
+		log.Warn().Int("duplicates", duplicates).Int("deleted", deleted).Bool("correction", handler.product.IsCorrection()).Str("vtec", vtec.Original).Msg("found existing ugcs for new vtec event")
+		return nil
 	}
 
 	for _, ugc := range approved {
-		newUGC := &models.VTECUGC{
+		newUGC := &vtecUGC{
 			WFO:          event.WFO,
 			Phenomena:    event.Phenomena,
 			Significance: event.Significance,
@@ -380,7 +569,7 @@ func (handler *vtecHandler) ugcNew(segment *awips.ProductSegment, event *models.
 	return nil
 }
 
-func (handler *vtecHandler) ugcUpdate(segment *awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC, ugcs []*models.UGCMinimal) error {
+func (handler *vtecHandler) ugcUpdate(segment *awips.ProductSegment, event *vtecEvent, vtec awips.VTEC, ugcs []*ugcMinimal) error {
 
 	expires := segment.UGC.Expires
 	end := event.Ends
@@ -395,19 +584,7 @@ func (handler *vtecHandler) ugcUpdate(segment *awips.ProductSegment, event *mode
 	wfo = $4 AND phenomena = $5 AND significance = $6 AND event_number = $7 AND year = $8
 	AND ugc = ANY($9)
 	`, expires, end, vtec.Action, event.WFO, event.Phenomena, event.Significance, event.EventNumber,
-		event.Year, ugcs)
+		event.Year, u)
 
 	return err
-}
-
-func (handler *vtecHandler) updateEvent(segment *awips.ProductSegment, event *models.VTECEvent, vtec awips.VTEC) {
-
-	_, err := handler.tx.Exec(handler.ctx, `
-	UPDATE vtec.events SET updated_at = CURRENT_TIMESTAMP, is_emergency = $6, is_pds = $7 WHERE
-			wfo = $1 AND phenomena = $2 AND significance = $3 AND event_number = $4 AND year = $5
-			`, vtec.WFO, vtec.Phenomena, vtec.Significance, vtec.EventNumber, event.Year, segment.IsEmergency(), segment.IsPDS())
-	if err != nil {
-		handler.log.Warn().Err(err).Str("vtec", vtec.Original).Msg("failed to update vtec event")
-		return
-	}
 }

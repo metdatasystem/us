@@ -100,6 +100,11 @@ func ParseLatLonSegments(segments []string) ([]geom.Coord, error) {
 		}
 	}
 
+	last := points[len(points)-1]
+	if !last.Equal(geom.XY, points[0]) {
+		points = append(points, points[0])
+	}
+
 	return points, nil
 }
 

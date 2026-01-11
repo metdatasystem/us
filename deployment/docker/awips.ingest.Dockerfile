@@ -1,9 +1,9 @@
-FROM golang:1.25.4 AS build
+FROM golang:1.25.5 AS build
 
 LABEL description="A service supporting the ingest of AWIPS products into the US MDS."
 
 # Set destination for COPY
-WORKDIR /
+WORKDIR /app
 
 # Download Go modules
 COPY go.mod go.sum ./
@@ -14,12 +14,6 @@ RUN go mod download
 COPY . ./
 
 # Build
-RUN CGO_ENABLED=0 GOOS=linux go build -C ./cmd -o /awips
+RUN CGO_ENABLED=0 GOOS=linux go build -C ./cmd/ingest/awips -o /app/awips
 
-FROM alpine:latest AS release
-
-WORKDIR /
-
-COPY --from=build /awips /awips
-
-ENTRYPOINT [ "/awips", "nwws" ]
+ENTRYPOINT [ "/app/awips", "nwws" ]

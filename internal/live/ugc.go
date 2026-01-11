@@ -1,10 +1,9 @@
 package main
 
 import (
+	"context"
 	"sync"
 
-	"github.com/metdatasystem/us/shared/db"
-	"github.com/metdatasystem/us/shared/models"
 	"github.com/rs/zerolog/log"
 )
 
@@ -35,13 +34,27 @@ func (store *UGCStore) load() error {
 	store.mu.Lock()
 	defer store.mu.Unlock()
 
-	data, err := db.GetAllValidUGCMinimal(store.hub.db)
+	rows, err := store.hub.db.Query(context.Background(), `
+	SELECT id, ugc, name, state, type, number FROM postgis.ugcs WHERE valid_to IS NULL
+	`)
 	if err != nil {
 		return err
 	}
+	defer rows.Close()
 
-	for _, u := range data {
-		store.data[u.UGC] = modelToUGC(u)
+	for rows.Next() {
+		ugc := UGC{}
+		if err := rows.Scan(
+			&ugc.ID,
+			&ugc.Code,
+			&ugc.Name,
+			&ugc.State,
+			&ugc.Type,
+			&ugc.Number,
+		); err != nil {
+			return err
+		}
+		store.data[ugc.Code] = &ugc
 	}
 
 	log.Debug().Int("size", len(store.data)).Msg("loaded UGC data")
@@ -59,15 +72,4 @@ func (store *UGCStore) findUGC(code string) *UGC {
 	}
 
 	return ugc
-}
-
-func modelToUGC(u *models.UGCMinimal) *UGC {
-	return &UGC{
-		ID:     u.ID,
-		Code:   u.UGC,
-		State:  u.State,
-		Type:   u.Type,
-		Number: u.Number,
-		Name:   u.Name,
-	}
 }

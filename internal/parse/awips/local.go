@@ -74,6 +74,5 @@ func processFile(file *os.File, size int64, db *pgxpool.Pool, rabbit *amqp.Chann
 	text := string(data)
 
 	HandleText(text, time.Now(), db, rabbit)
-
 	time.Sleep(10 * time.Second)
 }
