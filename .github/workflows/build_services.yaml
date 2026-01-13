@@ -21,8 +21,13 @@ jobs:
             #
         strategy:
             matrix:
-                module: [ingest/awips, parse/awips, live]
-                dockerfile: [awips.ingest, awips.parse, live]
+                module:
+                    - name: ingest/awips
+                      dockerfile: awips.ingest
+                    - name: parse/awips
+                      dockerfile: awips.parse
+                    - name: live
+                      dockerfile: live
         steps:
             - name: Checkout repository
               uses: actions/checkout@v4
@@ -41,14 +46,14 @@ jobs:
               id: meta
               uses: docker/metadata-action@v5.7.0
               with:
-                  images: ${{ env.REGISTRY }}/${{ github.repository }}/${{matrix.module}}
+                  images: ${{ env.REGISTRY }}/${{ github.repository }}/${{matrix.module.name}}
 
             - name: Build and push Docker image
               id: push
               uses: docker/build-push-action@v6.15.0
               with:
                   context: .
-                  file: ./deployment/docker/${{matrix.dockerfile}}
+                  file: ./deployment/docker/${{matrix.module.dockerfile}}.Dockerfile
                   platforms: linux/amd64
                   push: true
                   tags: ${{ steps.meta.outputs.tags }}
